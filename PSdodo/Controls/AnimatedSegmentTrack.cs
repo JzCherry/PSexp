@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -10,9 +9,7 @@ using Avalonia.VisualTree;
 
 namespace PsExporter.Controls;
 
-/// <summary>
-/// 分段控件的统一轨道。业务选择仍由原 Button.Command 执行；选中块只在绘制层移动。
-/// </summary>
+/// <summary>分段选择轨道。保留原 XAML 类型名；选中状态立即绘制，不播放切换动画。</summary>
 public sealed class AnimatedSegmentTrack : ContinuousBorder
 {
     public static readonly StyledProperty<object?> SelectionValueProperty =
@@ -35,170 +32,70 @@ public sealed class AnimatedSegmentTrack : ContinuousBorder
 
     private readonly ContinuousCornerRenderer _indicatorRenderer = new();
     private readonly ContinuousCornerRenderer _hoverRenderer = new();
-    private readonly Stopwatch _motion = new();
-    private Rect _from;
-    private Rect _current;
-    private Rect _target;
-    private Size _layoutSize;
-    private bool _hasSelection;
-    private bool _animating;
-    private bool _framePending;
-    private int _generation;
-    private double _compression;
     private int _hoverIndex = -1;
-    private const double DurationMs = 240;
 
     public AnimatedSegmentTrack()
     {
         AddHandler(Button.ClickEvent, OnButtonClick, RoutingStrategies.Bubble);
-        PointerExited += (_, _) =>
-        {
-            _hoverIndex = -1;
-            InvalidateVisual();
-        };
+        PointerExited += (_, _) => { _hoverIndex = -1; InvalidateVisual(); };
     }
+
+    private Button[] Options => Child is Panel panel
+        ? panel.Children.OfType<Button>().Where(b => b.IsVisible).ToArray() : [];
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        var position = e.GetPosition(this);
-        var options = Options;
-        var index = Array.FindIndex(options, b => b.IsEffectivelyEnabled
-            && b.TranslatePoint(default, this) is { } origin && new Rect(origin, b.Bounds.Size).Contains(position));
+        var point = e.GetPosition(this);
+        var index = Array.FindIndex(Options, b => b.IsEffectivelyEnabled
+            && b.TranslatePoint(default, this) is { } origin && new Rect(origin, b.Bounds.Size).Contains(point));
         if (_hoverIndex == index) return;
         _hoverIndex = index;
         InvalidateVisual();
     }
-
-    private Button[] Options => Child is Panel panel ? panel.Children.OfType<Button>().ToArray() : [];
-
-    private int SelectedIndex(Button[] options)
-        => Array.FindIndex(options, b => SameValue(SelectionValue, b.CommandParameter)
-            || (GetSelectionAlias(b) is { } alias && SameValue(SelectionValue, alias)));
 
     private static bool SameValue(object? left, object? right)
         => left is not null && right is not null
             && string.Equals(Convert.ToString(left, CultureInfo.InvariantCulture),
                 Convert.ToString(right, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
 
-    // 分段选项只通过点击切换；滚轮保留给外层滚动区域。
     private void OnButtonClick(object? sender, RoutedEventArgs e)
-    {
-        // Click 路由可能早于 Command 执行；下一次 UI 调度再读取真实选择。
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (IsEffectivelyVisible) MoveToSelection(feedback: true);
-        });
-    }
+        // Command 可能晚于 Click 路由；只补一次重绘，不排队播放任何动画。
+        => Dispatcher.UIThread.Post(InvalidateVisual);
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == SelectionValueProperty) MoveToSelection();
-        if (change.Property == IndicatorBrushProperty || change.Property == IndicatorBorderBrushProperty
-            || change.Property == HoverBrushProperty)
+        if (change.Property == SelectionValueProperty || change.Property == IndicatorBrushProperty
+            || change.Property == IndicatorBorderBrushProperty || change.Property == HoverBrushProperty)
             InvalidateVisual();
     }
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var result = base.ArrangeOverride(finalSize);
-        var resized = _layoutSize != finalSize;
-        _layoutSize = finalSize;
-        MoveToSelection(immediate: resized || !IsEffectivelyVisible);
-        return result;
+        var size = base.ArrangeOverride(finalSize);
+        InvalidateVisual();
+        return size;
     }
-
-    private void MoveToSelection(bool feedback = false, bool immediate = false)
-    {
-        var options = Options;
-        var index = SelectedIndex(options);
-        if (index < 0 || options[index].Bounds.Width <= 0) return;
-        var button = options[index];
-        if (button.TranslatePoint(default, this) is not { } origin) return;
-        var target = new Rect(origin, button.Bounds.Size);
-        if (_hasSelection && target == _target && !feedback && !immediate) return;
-        _target = target;
-        if (!_hasSelection || immediate || !IsEffectivelyVisible || TopLevel.GetTopLevel(this) is null)
-        {
-            _current = target;
-            _hasSelection = true;
-            _animating = false;
-            _compression = 0;
-            InvalidateVisual();
-            return;
-        }
-        // 快速点击或反向滚轮直接从当前绘制位置转向，不等待上一段动画。
-        _from = _current;
-        _motion.Restart();
-        _animating = true;
-        RequestFrame();
-    }
-
-    private void RequestFrame()
-    {
-        if (_framePending || TopLevel.GetTopLevel(this) is not { } topLevel) return;
-        _framePending = true;
-        var generation = _generation;
-        topLevel.RequestAnimationFrame(_ =>
-        {
-            if (generation != _generation) return;
-            _framePending = false;
-            if (!_animating) return;
-            if (!IsEffectivelyVisible)
-            {
-                _current = _target;
-                _animating = false;
-                _compression = 0;
-                return;
-            }
-            var t = Math.Clamp(_motion.Elapsed.TotalMilliseconds / DurationMs, 0, 1);
-            var x = t - 1;
-            var eased = 1 + 2.15 * x * x * x + 1.15 * x * x;
-            _current = new Rect(
-                Lerp(_from.X, _target.X, eased), Lerp(_from.Y, _target.Y, eased),
-                Math.Max(1, Lerp(_from.Width, _target.Width, eased)),
-                Math.Max(1, Lerp(_from.Height, _target.Height, eased)));
-            _compression = 0.045 * Math.Sin(Math.PI * t);
-            if (t >= 1)
-            {
-                _current = _target;
-                _animating = false;
-                _compression = 0;
-                _motion.Stop();
-            }
-            InvalidateVisual();
-            if (_animating) RequestFrame();
-        });
-    }
-
-    private static double Lerp(double from, double to, double t) => from + (to - from) * t;
 
     public override void Render(DrawingContext context)
     {
         base.Render(context);
         var options = Options;
-        if (_hoverIndex >= 0 && _hoverIndex < options.Length
-            && options[_hoverIndex].TranslatePoint(default, this) is { } origin)
-        {
-            using (context.PushTransform(Matrix.CreateTranslation(origin.X, origin.Y)))
-                _hoverRenderer.Render(context, options[_hoverIndex].Bounds.Size, new CornerRadius(10),
-                    default, HoverBrush, null);
-        }
-        if (!_hasSelection) return;
-        var height = _current.Height * (1 - _compression);
-        using (context.PushTransform(Matrix.CreateTranslation(_current.X, _current.Y + (_current.Height - height) / 2)))
-            _indicatorRenderer.Render(context, new Size(_current.Width, height), new CornerRadius(10),
-                new Thickness(1), IndicatorBrush, IndicatorBorderBrush);
+        if (_hoverIndex >= 0 && _hoverIndex < options.Length)
+            DrawOption(context, options[_hoverIndex], _hoverRenderer, HoverBrush, null);
+        var selected = Array.Find(options, b => SameValue(SelectionValue, b.CommandParameter)
+            || (GetSelectionAlias(b) is { } alias && SameValue(SelectionValue, alias)));
+        if (selected is not null)
+            DrawOption(context, selected, _indicatorRenderer, IndicatorBrush, IndicatorBorderBrush);
     }
 
-    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    private void DrawOption(DrawingContext context, Button button, ContinuousCornerRenderer renderer,
+        IBrush? fill, IBrush? border)
     {
-        _generation++;
-        _framePending = false;
-        _animating = false;
-        _hasSelection = false;
-        _motion.Reset();
-        base.OnDetachedFromVisualTree(e);
+        if (button.Bounds.Width <= 0 || button.TranslatePoint(default, this) is not { } origin) return;
+        using (context.PushTransform(Matrix.CreateTranslation(origin.X, origin.Y)))
+            renderer.Render(context, button.Bounds.Size, new CornerRadius(10),
+                border is null ? default : new Thickness(1), fill, border);
     }
 }

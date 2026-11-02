@@ -28,6 +28,11 @@ public sealed class EqualsToBgConverter : IValueConverter
 public sealed class EqualsToTextBrushConverter : IValueConverter
 {
     public static readonly EqualsToTextBrushConverter Instance = new();
+    public static readonly EqualsToTextBrushConverter SettingsInstance = new("Brush.OnAccent");
+    private readonly string _selectedBrushKey;
+
+    public EqualsToTextBrushConverter() : this("Brush.TextPrimary") { }
+    private EqualsToTextBrushConverter(string selectedBrushKey) => _selectedBrushKey = selectedBrushKey;
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
@@ -38,7 +43,7 @@ public sealed class EqualsToTextBrushConverter : IValueConverter
 
         bool equals = string.Equals(vStr, pStr, StringComparison.OrdinalIgnoreCase);
 
-        return equals ? DesignBrushResolver.Get("Brush.TextPrimary") : DesignBrushResolver.Get("Brush.TextSecondary");
+        return equals ? DesignBrushResolver.Get(_selectedBrushKey) : DesignBrushResolver.Get("Brush.TextSecondary");
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

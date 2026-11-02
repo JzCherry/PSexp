@@ -37,12 +37,10 @@ public sealed partial class PhotoshopService : IPhotoshopService
 
     public async Task<(PsDocumentInfo Doc, PsBridgeResult Result)> ProbeDocumentInfoAsync(CancellationToken ct = default)
     {
-        if (_useUxpProbe) return await ProbeWithUxpAsync(ct);
         var (document, res) = await ProbeDocumentInfoQuietlyAsync(ct);
         if (res.Success || _probeUxpBridge is null) return (document, res);
-        // Only an explicit refresh/export preflight may use this fallback. Activation never enters here.
-        _useUxpProbe = true;
-        _probeLogger?.Warn("主动刷新时 COM 文档识别不可用，改用 UXP：" + res.Error);
+        // Only explicit export preflight may use this fallback. Refresh commands and activation use the quiet path.
+        _probeLogger?.Warn("导出前 COM 文档识别不可用，改用 UXP：" + res.Error);
         return await ProbeWithUxpAsync(ct);
     }
 

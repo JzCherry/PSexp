@@ -180,7 +180,14 @@ public sealed class ContinuousContentPresenter : ContinuousBorder
 
     public ContinuousContentPresenter()
     {
-        var presenter = new Avalonia.Controls.Presenters.ContentPresenter();
+        // 内层只负责内容布局与文字继承；背景/描边由外层连续曲率轮廓唯一绘制。
+        // 本地透明值防止通用或主题悬停样式把内层染成直角矩形。
+        var presenter = new Avalonia.Controls.Presenters.ContentPresenter
+        {
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = default
+        };
         presenter.Bind(Avalonia.Controls.Presenters.ContentPresenter.ContentProperty, this.GetObservable(ContentProperty));
         presenter.Bind(Avalonia.Controls.Presenters.ContentPresenter.ContentTemplateProperty, this.GetObservable(ContentTemplateProperty));
         presenter.Bind(Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty, this.GetObservable(ForegroundProperty));

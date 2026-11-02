@@ -41,6 +41,10 @@
     <SolidColorBrush x:Key="Brush.Accent" Color="{StaticResource Color.Accent}"/>
     <SolidColorBrush x:Key="Brush.AccentHover" Color="{StaticResource Color.AccentHover}"/>
     <SolidColorBrush x:Key="Brush.AccentPressed" Color="{StaticResource Color.AccentPressed}"/>
+    <!-- 只对主界面选中底色和描边降透明度，文字保持正常对比度。 -->
+    <SolidColorBrush x:Key="Brush.SegmentSelected" Color="{StaticResource Color.Accent}" Opacity="0.20"/>
+    <SolidColorBrush x:Key="Brush.SegmentSelectedBorder" Color="{StaticResource Color.Accent}" Opacity="0.45"/>
+    <SolidColorBrush x:Key="Brush.SegmentHover" Color="{StaticResource Color.Accent}" Opacity="0.08"/>
     <SolidColorBrush x:Key="Brush.Hover" Color="{StaticResource Color.Hover}"/>
     <SolidColorBrush x:Key="Brush.StatusSurface" Color="{StaticResource Color.StatusSurface}"/>
     <SolidColorBrush x:Key="Brush.StatusBorder" Color="{StaticResource Color.StatusBorder}"/>
@@ -55,7 +59,7 @@
     <SolidColorBrush x:Key="Brush.SettingsCard" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="Brush.SettingsBorder" Color="#E1E5EF"/>
     <SolidColorBrush x:Key="Brush.SettingsTrack" Color="#EEF1F6"/>
-    <SolidColorBrush x:Key="Brush.SettingsSelected" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Brush.SettingsSelected" Color="{StaticResource Color.Accent}"/>
     <CornerRadius x:Key="Radius.SettingsCard">16</CornerRadius>
 
     <!-- Space reserved outside the surface so the window shadow is not clipped. -->

@@ -58,7 +58,6 @@ public partial class MainWindow : Window
     private SKBitmap? _genieCapturedBitmap;
     // 最近一次神灯快照与纹理保留到下次动作准备或退出收纳，避免展开末帧集中释放资源。
     private SKBitmap? _dockRevealBitmap;
-    private GenieAnimationWindow? _genieAnimationWindow;
     private DockIconWindow? _dockIconWindow;
     private DockIconPlacement _dockIconPlacement;
     private MainViewModel? _animationViewModel;
@@ -108,6 +107,10 @@ public partial class MainWindow : Window
 
     private IntPtr SubclassWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        // 只约束本窗口动画期间的鼠标激活，不安装全局键鼠钩子。
+        if (msg == 0x0021 && _isSnapAnimating) return new IntPtr(3); // WM_MOUSEACTIVATE / MA_NOACTIVATE
+        if (msg == 0x0112 && (wParam.ToInt64() & 0xFFF0) == 0xF020
+            && TryQueueDockRetraction("native-system-minimize")) return IntPtr.Zero;
         if (msg == WM_NCLBUTTONDOWN && wParam.ToInt64() == HTCAPTION)
         {
             _isNativeTitleBarDrag = true;
@@ -178,12 +181,8 @@ public partial class MainWindow : Window
         Opened += async (_, _) => { if (DataContext is MainViewModel model) await model.InitializeUpdatesAsync(); };
         Closed += (_, _) => { if (DataContext is MainViewModel model) model.StopUpdateChecks(); };
         Activated += OnWindowActivated;
-        Deactivated += (_, _) =>
-        {
-            _hasProbedCurrentActivation = false;
-            EndInputEditing();
-            if (!_isSnapAnimating && DataContext is MainViewModel model) model.FlushParameterMemory();
-        };
+        Deactivated += OnWindowDeactivated;
+        PropertyChanged += OnDockWindowPropertyChanged;
         PositionChanged += OnWindowPositionChanged;
         SizeChanged += OnWindowSizeChanged;
         Closing += OnWindowClosing;
@@ -238,17 +237,30 @@ public partial class MainWindow : Window
         InvalidateRetractSnapshot();
         if (ReferenceEquals(_animationViewModel, viewModel)) return;
         if (_animationViewModel is not null)
+        {
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
+            _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
+        }
         _animationViewModel = viewModel;
         if (_animationViewModel is not null)
         {
             _animationViewModel.PropertyChanged += OnAnimationViewModelPropertyChanged;
+            _animationViewModel.DocumentChangeAvailable += OnPhotoshopDocumentChanged;
         }
         UpdateStatusAnimationState(restartActiveClocks: true);
     }
 
     private void OnAnimationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRefreshingStatus)
+            && _animationViewModel?.HasPendingDocumentChanges == true)
+            QueueForegroundDocumentProbe();
+        if (e.PropertyName == nameof(MainViewModel.AutoRefreshOnActivated)
+            && _animationViewModel?.AutoRefreshOnActivated == true)
+        {
+            _hasProbedCurrentActivation = false;
+            QueueForegroundDocumentProbe();
+        }
         ++_edgeSceneRevision;
         _dockRevealBitmapStale = true;
         InvalidateRetractSnapshot();
@@ -404,14 +416,19 @@ public partial class MainWindow : Window
         _psPulseClock.Stop();
         _refreshRotationClock.Stop();
         _refreshSettleClock.Stop();
-        CloseGenieAnimationWindow();
+        ClearDockAnimationSurface();
         CloseDockIcon();
         ClearDockRevealBitmap();
-        _genieAnimationWindow?.Close();
         _dockIconWindow?.Close();
         UninstallWndProcSubclass();
+        Deactivated -= OnWindowDeactivated;
+        PropertyChanged -= OnDockWindowPropertyChanged;
         if (_animationViewModel is not null)
+        {
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
+            _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
+            _ = _animationViewModel.StopDocumentEventsAsync();
+        }
         DataContextChanged -= OnAnimationDataContextChanged;
     }
 
@@ -585,16 +602,26 @@ public partial class MainWindow : Window
             var heightDip = Bounds.Height;
             if (widthDip <= 0 || heightDip <= 0) return null;
 
-            var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
             var scaling = CalculateCaptureScale(widthDip, heightDip, _dockScaling);
             _captureScale = scaling;
             var pixelWidth = (int)Math.Max(1, Math.Round(widthDip * scaling));
             var pixelHeight = (int)Math.Max(1, Math.Round(heightDip * scaling));
 
-            using var rtb = new RenderTargetBitmap(new PixelSize(pixelWidth, pixelHeight), new Vector(96 * scaling, 96 * scaling));
-            // Capture the same outer coordinates as the live window, including shadow.
-            // Rendering only MainContentBorder would drop its margin and shift the genie image.
-            rtb.Render(RootGrid);
+            // Avalonia 12.1.1 的直接高 DPI Render 路径在阴影/裁剪恢复矩阵后，
+            // 可能重复应用隐式 DPI，导致外框正常而内部文字/控件放大并被裁掉。
+            // 用 96 DPI 目标与可缩放 VisualBrush 记录界面，再明确映射到物理像素。
+            // 不能把已经错误放大的快照在播放末尾缩小来补偿。
+            using var rtb = new RenderTargetBitmap(new PixelSize(pixelWidth, pixelHeight), new Vector(96, 96));
+            using (var drawing = rtb.CreateDrawingContext())
+            {
+                var brush = new VisualBrush(RootGrid)
+                {
+                    Stretch = Stretch.Fill,
+                    SourceRect = new RelativeRect(new Rect(0, 0, widthDip, heightDip), RelativeUnit.Absolute)
+                };
+                // 与真实窗口采用同一原点，包含 12 DIP 阴影边距。
+                drawing.DrawRectangle(brush, null, new Rect(0, 0, pixelWidth, pixelHeight));
+            }
 
             var info = new SKImageInfo(pixelWidth, pixelHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
             bitmap = new SKBitmap(info);
@@ -615,11 +642,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CloseGenieAnimationWindow(bool retainTexture = false, bool restoreInput = true)
+    private void ClearDockAnimationSurface(bool retainTexture = false, bool restoreInput = true)
     {
         if (restoreInput) ResetLiveWindowPreparation();
         InvalidateRetractSnapshot();
-        _genieAnimationWindow?.Park(_offscreenParkPos, retainTexture);
+        RestoreDockAnimationLayout();
+        DockAnimationSurface.MeshData = null;
+        if (!retainTexture) DockAnimationSurface.Bitmap = null;
         _genieCapturedBitmap?.Dispose();
         _genieCapturedBitmap = null;
     }
@@ -665,7 +694,7 @@ public partial class MainWindow : Window
         _isSnapAnimating = false;
         _isEdgeFinishing = false;
         _snapClock.Stop();
-        CloseGenieAnimationWindow();
+        ClearDockAnimationSurface();
         CloseDockIcon();
         ClearDockRevealBitmap();
         WindowTaskSwitcher.Configure(this, excluded: false);
@@ -686,7 +715,9 @@ public partial class MainWindow : Window
     public static double CalculateCaptureScale(double width, double height, double screenScale)
     {
         if (width <= 0 || height <= 0 || !double.IsFinite(width * height)) return 1;
-        return Math.Min(Math.Clamp(screenScale, 0.1, 1.5), Math.Sqrt(2_000_000 / (width * height)));
+        if (!double.IsFinite(screenScale)) screenScale = 1;
+        // 保留原屏幕像素密度，避免在展开末尾从低清纹理突然变成清晰文字。
+        return Math.Min(Math.Max(screenScale, 0.1), Math.Sqrt(8_000_000 / (width * height)));
     }
 
     private static async System.Threading.Tasks.Task NextFrameAsync(Window window)
@@ -758,8 +789,9 @@ public partial class MainWindow : Window
 
     private bool IsPointInsideWindow(NativePoint cursor, PixelPoint expandedPosition, double scaling)
     {
-        var widthPx = (int)Math.Round(Bounds.Width * Math.Max(scaling, 0.1));
-        var heightPx = (int)Math.Round(Bounds.Height * Math.Max(scaling, 0.1));
+        var size = _edgeLayoutPrepared ? _edgeWindowSize : Bounds.Size;
+        var widthPx = (int)Math.Round(size.Width * Math.Max(scaling, 0.1));
+        var heightPx = (int)Math.Round(size.Height * Math.Max(scaling, 0.1));
         var slack = (int)Math.Ceiling(24 * Math.Max(scaling, 0.1));
         return cursor.X >= expandedPosition.X - slack
             && cursor.X < expandedPosition.X + widthPx + slack
@@ -793,6 +825,12 @@ public partial class MainWindow : Window
     private void OnWindowActivated(object? sender, EventArgs e)
         => QueueForegroundDocumentProbe();
 
+    private void OnPhotoshopDocumentChanged(object? sender, EventArgs e)
+    {
+        // A background notification only sets a version. No COM call or UI change without foreground eligibility.
+        Dispatcher.UIThread.Post(QueueForegroundDocumentProbe, DispatcherPriority.Loaded);
+    }
+
     private bool CanReadForegroundDocument()
     {
         if (_isClosing || _isRestoringPlacement || !_placementRestorationCompleted
@@ -808,16 +846,18 @@ public partial class MainWindow : Window
         // One queued check per activation, after placement/animation has settled. Never poll or activate the window here.
         Dispatcher.UIThread.Post(async () =>
         {
-            if (_hasProbedCurrentActivation || !CanReadForegroundDocument()) return;
+            if (!CanReadForegroundDocument() || DataContext is not MainViewModel current
+                || (_hasProbedCurrentActivation && !current.HasPendingDocumentChanges)) return;
             var activationGeneration = _edgeAnimationGeneration;
             RootGrid.InvalidateVisual();
             var painted = await WaitForRenderedBatchAsync(this);
             if (!painted || activationGeneration != _edgeAnimationGeneration
-                || _hasProbedCurrentActivation || !CanReadForegroundDocument()
-                || DataContext is not MainViewModel vm) return;
+                || !CanReadForegroundDocument() || DataContext is not MainViewModel vm
+                || (_hasProbedCurrentActivation && !vm.HasPendingDocumentChanges)) return;
+            var onlyIfChanged = _hasProbedCurrentActivation;
             _hasProbedCurrentActivation = true;
             // Also consumes activations during an existing probe/export, so completion cannot cause another probe.
-            await vm.RefreshOnActivationAsync(CanReadForegroundDocument);
+            await vm.RefreshOnActivationAsync(CanReadForegroundDocument, onlyIfChanged);
         }, DispatcherPriority.Loaded);
     }
 
@@ -864,7 +904,7 @@ public partial class MainWindow : Window
         Hide();
         if (_isDocked) BeginUndockForDrag();
         CloseDockIcon();
-        CloseGenieAnimationWindow();
+        ClearDockAnimationSurface();
         StopSettingsPageFade();
         _statusAnimationTimer.Stop();
         _edgeHoverTimer.Stop();
@@ -982,7 +1022,7 @@ public partial class MainWindow : Window
         for (var visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
         {
             if (visual is Button or TextBox or ScrollBar or Thumb or Slider or ComboBox or NumericUpDown
-                or ToggleSwitch or CheckBox or ListBox) return;
+                or ToggleSwitch or CheckBox or ListBox or AnimatedSegmentTrack) return;
             if (visual is Control { Name: "QualityMeter" }) return;
         }
         // 空白处直接进入系统移动循环；导出、文本编辑、质量拖动和边缘缩放各保留原有操作。
@@ -1019,7 +1059,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>最小化按钮</summary>
-    private void OnMinimizeClick(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void OnMinimizeClick(object? sender, RoutedEventArgs e)
+    {
+        if (!TryQueueDockRetraction("caption-minimize")) WindowState = WindowState.Minimized;
+    }
 
     /// <summary>关闭按钮</summary>
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
@@ -1100,6 +1143,8 @@ public partial class MainWindow : Window
 
             var preference = 1; // 主窗由 ContinuousBorder 绘制外形，关闭 DWM 圆弧裁切。
             _ = DwmSetWindowAttribute(hwnd, 33, ref preference, sizeof(int));
+            var ncaPolicy = 1; // 仅使用界面自身投影，临时动画画布不能出现原生矩形阴影。
+            _ = DwmSetWindowAttribute(hwnd, 2, ref ncaPolicy, sizeof(int));
         }
         catch
         {

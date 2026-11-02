@@ -656,9 +656,9 @@ try
     Run("Dock snapshot scale respects DPI and bounds memory", () =>
     {
         Equal(1d, MainWindow.CalculateCaptureScale(725, 515, 1));
-        Equal(1.5d, MainWindow.CalculateCaptureScale(725, 515, 3));
+        Equal(3d, MainWindow.CalculateCaptureScale(725, 515, 3));
         var scale = MainWindow.CalculateCaptureScale(3840, 2160, 2);
-        True(3840 * 2160 * scale * scale <= 2_000_001);
+        True(3840 * 2160 * scale * scale <= 8_000_001);
     });
 
     Run("Docked idle and animation states suspend status rendering", () =>

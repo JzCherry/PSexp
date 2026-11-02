@@ -504,7 +504,9 @@ public static class EdgeSnapHelper
                     DockEdge.Bottom => 1f - v,
                     _ => 0f
                 };
-                var local = (float)Math.Clamp((p - distance * 0.42) / 0.58, 0, 1);
+                // 连续的空间延迟：每一列都移动到真正端点才停，避免展开后半段
+                // 大部分网格提前固定、只剩窄条运动，末尾看起来像突然换了一张图。
+                var local = (float)Math.Pow(p, 1 + distance * 1.35);
                 var anchor = dockAnchor ?? (edge switch
                 {
                     DockEdge.Left => new SKPoint(peekPx, height / 2),

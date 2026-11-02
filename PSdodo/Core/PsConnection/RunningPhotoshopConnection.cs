@@ -5,7 +5,7 @@ using Microsoft.Win32;
 
 namespace PsExporter.Core.PsConnection;
 
-/// <summary>Attach to an existing automation object; probing must never start another Photoshop COM server.</summary>
+/// <summary>Attach to a live Photoshop object in a compatible permission context; never activate a server.</summary>
 internal static class RunningPhotoshopConnection
 {
     private sealed record Registration(string ProgId, Guid ClassId, string ServerPath);
@@ -16,6 +16,9 @@ internal static class RunningPhotoshopConnection
     public static object Attach(out string description)
     {
         var runningPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var runningIds = new HashSet<int>();
+        using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+        var sessionId = currentProcess.SessionId;
         var processes = System.Diagnostics.Process.GetProcessesByName("Photoshop");
         try
         {
@@ -23,12 +26,16 @@ internal static class RunningPhotoshopConnection
             foreach (var process in processes)
                 try
                 {
+                    if (process.SessionId != sessionId) continue;
+                    runningIds.Add(process.Id);
                     if (process.MainModule?.FileName is { } path) runningPaths.Add(path);
                 }
                 catch { /* Access restrictions must not turn process detection into 'no document'. */ }
         }
         finally { foreach (var process in processes) process.Dispose(); }
 
+        // Diagnose integrity isolation before ROT lookup instead of waiting for a COM activation timeout.
+        WindowsProcessPermissions.EnsureCompatible(runningIds);
         var registrations = Registrations.Value;
         var matching = registrations.Where(item => runningPaths.Contains(item.ServerPath)).ToArray();
         // Never attach to a different installed version when the running EXE has a matching registration.
@@ -56,8 +63,7 @@ internal static class RunningPhotoshopConnection
         if (TryAttachFromRunningObjectTable(runningPaths, failures, out var discovered, out description))
             return discovered!;
         throw new PsNotConnectedException("Photoshop 正在运行，但无法连接其自动化接口。"
-            + "已检查注册名称和已运行对象表；未启动 Photoshop、未派发外部脚本。"
-            + "请查看同级 psx.log，核对 Photoshop 就绪状态与进程权限。连接记录："
+            + "已检查进程权限、注册名称及已运行对象表；未启动 Photoshop、未派发外部脚本。连接记录："
             + (failures.Count > 0 ? string.Join("；", failures) : "未找到可用的 COM 注册"));
     }
 
@@ -160,7 +166,7 @@ internal static class RunningPhotoshopConnection
         try
         {
             names.AddRange(Registry.ClassesRoot.GetSubKeyNames().Where(name => name.StartsWith("Photoshop.Application.", StringComparison.OrdinalIgnoreCase)
-                && name["Photoshop.Application.".Length..].All(char.IsDigit)));
+                && name["Photoshop.Application.".Length..].Split('.').All(part => part.Length > 0 && part.All(char.IsDigit))));
         }
         catch { /* The generic registration is still checked when enumeration is restricted. */ }
         foreach (var name in names.Distinct(StringComparer.OrdinalIgnoreCase))

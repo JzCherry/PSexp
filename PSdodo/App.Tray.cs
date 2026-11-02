@@ -128,11 +128,16 @@ public partial class App
 
     internal void MarkShutdownRequested() => IsExitRequested = true;
 
-    internal void RequestExit()
+    internal async void RequestExit()
     {
         if (IsExitRequested) return;
         IsExitRequested = true;
         _trayLogger?.Info("正在退出 PSexp。");
+        if (_trayModel is { } model)
+        {
+            try { await model.StopDocumentEventsAsync().WaitAsync(TimeSpan.FromSeconds(1)); }
+            catch (Exception error) { _trayLogger?.Debug("事件清理等待结束；租约已失效：" + error.Message); }
+        }
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.Shutdown();
     }
 

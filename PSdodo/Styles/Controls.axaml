@@ -134,7 +134,7 @@
         <Setter Property="MinHeight" Value="{StaticResource Control.ModeHeight}"/>
         <Setter Property="MaxHeight" Value="{StaticResource Control.ModeHeight}"/>
         <Setter Property="MinWidth" Value="0"/>
-        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="{StaticResource Thickness.None}"/>
         <Setter Property="CornerRadius" Value="{StaticResource Radius.Sm}"/>
@@ -146,14 +146,14 @@
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="VerticalAlignment" Value="Stretch"/>
     </Style>
-    <Style Selector="Button.mode:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.mode:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="{StaticResource Brush.Hover}"/>
     </Style>
     <Style Selector="Button.mode:disabled">
         <Setter Property="Opacity" Value="1"/>
         <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
     </Style>
-    <Style Selector="Button.mode:disabled /template/ ContentPresenter">
+    <Style Selector="Button.mode:disabled /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Opacity" Value="{StaticResource Opacity.Disabled}"/>
     </Style>
@@ -166,7 +166,7 @@
         <Setter Property="MinHeight" Value="{StaticResource Control.SegmentHeight}"/>
         <Setter Property="MaxHeight" Value="{StaticResource Control.SegmentHeight}"/>
         <Setter Property="MinWidth" Value="0"/>
-        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="CornerRadius" Value="{StaticResource Radius.Sm}"/>
@@ -178,7 +178,7 @@
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="VerticalAlignment" Value="Stretch"/>
     </Style>
-    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="{StaticResource Brush.Hover}"/>
     </Style>
 
@@ -200,7 +200,7 @@
     <Style Selector="Button.primary TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF"/>
     </Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="{StaticResource Brush.AccentHover}"/>
     </Style>
     <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
@@ -232,7 +232,7 @@
     <Style Selector="Button.secondary TextBlock">
         <Setter Property="Foreground" Value="{Binding $parent[Button].Foreground}"/>
     </Style>
-    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="{StaticResource Brush.Hover}"/>
         <Setter Property="Foreground" Value="{StaticResource Brush.TextPrimary}"/>
     </Style>
@@ -255,7 +255,7 @@
     <Style Selector="Button.folder TextBlock">
         <Setter Property="Foreground" Value="{Binding $parent[Button].Foreground}"/>
     </Style>
-    <Style Selector="Button.folder:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.folder:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="{StaticResource Brush.Hover}"/>
         <Setter Property="Foreground" Value="{StaticResource Brush.TextPrimary}"/>
     </Style>
@@ -300,7 +300,7 @@
         <Setter Property="RenderTransform" Value="scale(1, 1)"/>
         <Setter Property="ZIndex" Value="10"/>
     </Style>
-    <Style Selector="Button.qcell:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.qcell:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="Transparent"/>
     </Style>
 
@@ -338,6 +338,7 @@
         <Setter Property="FontSize" Value="{StaticResource FontSize.Subtitle}"/>
     </Style>
     <Style Selector="TextBlock.mode-label">
+        <Setter Property="TextWrapping" Value="NoWrap"/>
         <Setter Property="FontSize" Value="{StaticResource FontSize.Body}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="HorizontalAlignment" Value="Center"/>
@@ -382,11 +383,11 @@
         <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}"/>
     </Style>
     <Style Selector="controls|AnimatedSegmentTrack">
-        <Setter Property="IndicatorBrush" Value="{StaticResource Brush.Surface}"/>
-        <Setter Property="IndicatorBorderBrush" Value="{StaticResource Brush.Border}"/>
-        <Setter Property="HoverBrush" Value="{StaticResource Brush.Hover}"/>
+        <Setter Property="IndicatorBrush" Value="{StaticResource Brush.SegmentSelected}"/>
+        <Setter Property="IndicatorBorderBrush" Value="{StaticResource Brush.SegmentSelectedBorder}"/>
+        <Setter Property="HoverBrush" Value="{StaticResource Brush.SegmentHover}"/>
     </Style>
-    <!-- 悬停与选中表面均由轨道绘制，按钮绘制层不能遮住移动中的选中块。 -->
+    <!-- 悬停与选中表面均由轨道绘制，按钮绘制层不能遮住选中块。 -->
     <Style Selector="Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter, Button.mode:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, Button.mode:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="Transparent"/>
     </Style>
@@ -464,7 +465,11 @@
         <Setter Property="Background" Value="{DynamicResource Brush.SettingsTrack}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
         <Setter Property="IndicatorBrush" Value="{DynamicResource Brush.SettingsSelected}"/>
-        <Setter Property="IndicatorBorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
+        <Setter Property="IndicatorBorderBrush" Value="{StaticResource Brush.Accent}"/>
+    </Style>
+    <!-- 悬停由轨道绘制，按钮模板不能盖住蓝色选中块。 -->
+    <Style Selector="controls|ContinuousBorder.settings-section Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, controls|ContinuousBorder.settings-section Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter, controls|AnimatedSegmentTrack.settings-tabs Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, controls|AnimatedSegmentTrack.settings-tabs Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
+        <Setter Property="Background" Value="Transparent"/>
     </Style>
     <Style Selector="Grid.settings-row">
         <Setter Property="MinHeight" Value="40"/>

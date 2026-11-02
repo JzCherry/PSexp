@@ -23,7 +23,8 @@ internal sealed class GenieTexture : IDisposable
     internal GenieTexture(SKBitmap bitmap)
     {
         _image = SKImage.FromBitmap(bitmap);
-        _shader = _image.ToShader();
+        _shader = _image.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp,
+            new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
         Paint = new SKPaint { Shader = _shader, IsAntialias = true };
     }
     internal GenieTexture Acquire() { System.Threading.Interlocked.Increment(ref _references); return this; }
@@ -120,7 +121,8 @@ public class GenieMeshControl : Control
     private SKPoint[]? _cachedTextureCoordinates;
     private SKPoint[]? _textureCoordinatesSource;
     private GenieTexture? _texture;
-    private double _cachedTextureScale = double.NaN;
+    private double _cachedTextureScaleX = double.NaN;
+    private double _cachedTextureScaleY = double.NaN;
     private TaskCompletionSource<bool>? _drawReady;
     private GenieFrameTiming _frameTiming = new();
 
@@ -184,21 +186,26 @@ public class GenieMeshControl : Control
 
     private SKPoint[]? GetTextureCoordinates()
     {
-        if (MeshData is null) return null;
+        if (MeshData is null || Bitmap is null || MeshData.SourceWidth <= 0 || MeshData.SourceHeight <= 0) return null;
+        // 每个方向独立按实际纹理像素映射。125%/175% 等缩放会产生取整，
+        // 不能把名义 DPI 当作两个方向都绝对精确的纹理比例。
+        var scaleX = Bitmap.Width / (double)MeshData.SourceWidth;
+        var scaleY = Bitmap.Height / (double)MeshData.SourceHeight;
         if (_cachedTextureCoordinates is not null
-            && Math.Abs(_cachedTextureScale - TextureScale) < 0.0001
+            && _cachedTextureScaleX == scaleX && _cachedTextureScaleY == scaleY
             && ReferenceEquals(_textureCoordinatesSource, MeshData.TexCoords))
             return _cachedTextureCoordinates;
 
         _textureCoordinatesSource = MeshData.TexCoords;
-        _cachedTextureScale = Math.Max(TextureScale, 0.1);
+        _cachedTextureScaleX = scaleX;
+        _cachedTextureScaleY = scaleY;
         _cachedTextureCoordinates = new SKPoint[MeshData.TexCoords.Length];
         for (var index = 0; index < _cachedTextureCoordinates.Length; index++)
         {
             var point = MeshData.TexCoords[index];
             _cachedTextureCoordinates[index] = new SKPoint(
-                point.X * (float)_cachedTextureScale,
-                point.Y * (float)_cachedTextureScale);
+                (float)(point.X * scaleX),
+                (float)(point.Y * scaleY));
         }
         return _cachedTextureCoordinates;
     }

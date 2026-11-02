@@ -175,12 +175,13 @@ public partial class MainWindow
         var screen = (_isDocked ? Screens.ScreenFromPoint(position) : Screens.ScreenFromWindow(this)) ?? Screens.Primary;
         if (screen is null || Bounds.Width <= 0 || Bounds.Height <= 0) return;
         var area = screen.WorkingArea;
+        var size = _edgeLayoutPrepared ? _edgeWindowSize : Bounds.Size;
         model.SaveWindowPlacement(new WindowPlacementState
         {
             X = position.X, Y = position.Y, WorkX = area.X, WorkY = area.Y,
             WorkWidth = area.Width, WorkHeight = area.Height, Scaling = screen.Scaling,
             IsDocked = _isDocked, Edge = _isDocked ? _dockedEdge.ToString() : DockEdge.None.ToString()
-        }, Bounds.Width, Bounds.Height);
+        }, size.Width, size.Height);
     }
 
     private void RestoreDockAfterScreenChange()
@@ -194,7 +195,7 @@ public partial class MainWindow
         _snapClock.Stop();
         _edgeHoverTimer.Stop();
         Opacity = 0;
-        CloseGenieAnimationWindow();
+        ClearDockAnimationSurface();
         CloseDockIcon();
         ClearDockRevealBitmap();
         _isDocked = false;

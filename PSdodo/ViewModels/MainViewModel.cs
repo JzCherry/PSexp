@@ -27,6 +27,7 @@ public partial class MainViewModel : ViewModelBase
     private CancellationTokenSource? _exportCts;
     private bool _settingsInitialized;
     private bool _suppressNextActivationRefresh;
+    private int _documentProcessId;
     private int? _activeExpectedFileCount;
     private double _windowWidth = AppSettings.DefaultWindowWidth;
     private double _windowHeight = AppSettings.DefaultWindowHeight;
@@ -83,7 +84,8 @@ public partial class MainViewModel : ViewModelBase
         AvailableFormats = Enum.GetValues<ExportFormat>();
         AvailableModes = Enum.GetValues<ExportMode>();
 
-        // 文档识别由主窗口真正获得前台焦点触发；构造模型时不派发脚本。
+        InitializeDocumentEvents();
+        // 构造时只准备事件接收器；首次前台成功识别后才注册 Photoshop 事件。
     }
 
     // ---------- PS 状态 ----------
@@ -275,14 +277,16 @@ public partial class MainViewModel : ViewModelBase
     };
 
     public string DocumentDisplayName => IsPsRunning && !string.IsNullOrEmpty(DocumentProbeError)
-        ? "无法读取 Photoshop 文档"
+        ? !string.IsNullOrEmpty(_documentProbeActionHint) ? "Photoshop 连接权限不一致"
+        : HasDocument ? $"{DocumentName}（同步中断）" : "无法读取 Photoshop 文档"
         : IsPsRunning && IsRefreshingStatus && !HasDocument ? "正在识别 Photoshop 文档…"
         : FormatDocumentDisplayName(IsPsRunning, HasDocument, DocumentName);
 
     public string PsVersionDisplay => FormatPsVersionDisplay(IsPsRunning, PsVersion);
 
     public string DocumentSizeDisplay => !string.IsNullOrEmpty(DocumentProbeError)
-        ? "文档状态读取失败" : FormatDocumentSizeDisplay(HasDocument, DocumentSize);
+        ? HasDocument ? $"{DocumentSize} · 上次识别" : "文档状态读取失败"
+        : FormatDocumentSizeDisplay(HasDocument, DocumentSize);
 
     public static string FormatDocumentDisplayName(bool isPsRunning, bool hasDocument, string documentName)
         => !isPsRunning
@@ -303,7 +307,9 @@ public partial class MainViewModel : ViewModelBase
         {
             if (IsExporting) return IsCancelling ? "正在停止当前任务..." : ExportStatusText;
             if (!IsPsRunning) return "请先打开 Photoshop";
-            if (!string.IsNullOrEmpty(DocumentProbeError)) return "无法读取文档，请刷新并查看日志";
+            if (!string.IsNullOrEmpty(_documentProbeActionHint)) return _documentProbeActionHint;
+            if (!string.IsNullOrEmpty(DocumentProbeError)) return HasDocument
+                ? "文档同步失败，可重试刷新；导出前会重新识别" : "无法读取文档，请刷新并查看日志";
             if (!IsBridgeAvailable) return "Photoshop 连接不可用";
             if (!HasDocument) return "请在 Photoshop 中打开一个文档";
             if (!HasExportTarget) return DestinationHint;
@@ -463,6 +469,7 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty] private string _documentProbeError = string.Empty;
     private DateTime _lastProbeErrorLoggedUtc;
     private string _lastProbeErrorLogged = string.Empty;
+    private string _documentProbeActionHint = string.Empty;
 
     partial void OnDocumentProbeErrorChanged(string value)
     {
@@ -471,9 +478,11 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ReadinessText));
     }
 
-    private void RecordDocumentProbeFailure(Exception? error)
+    private void RecordDocumentProbeFailure(Exception? error, bool preserveLastDocument = false)
     {
-        ResetDocumentState();
+        // A failed read cannot prove that the last successfully read document was closed.
+        if (!preserveLastDocument) ResetDocumentState();
+        _documentProbeActionHint = (error as PsNotConnectedException)?.UserHint ?? string.Empty;
         DocumentProbeError = error?.Message ?? "未知识别错误";
         ExportStatusText = "文档识别失败，请刷新；详情见日志";
         if (_lastProbeErrorLogged != DocumentProbeError || (DateTime.UtcNow - _lastProbeErrorLoggedUtc).TotalSeconds >= 30)
@@ -487,13 +496,22 @@ public partial class MainViewModel : ViewModelBase
     }
 
     // ---------- 状态机：自动探测 ----------
-    private async Task RefreshStatusAsync(bool silent, bool quiet = false)
+    // Refresh is always internal COM; only explicit export preflight may opt into external UXP fallback.
+    private async Task RefreshStatusAsync(bool silent, bool quiet = true)
     {
         if (!CanRefreshStatus) return;
         IsRefreshingStatus = true;
+        _lastDocumentEventAttemptVersion = _documentEvents?.Version ?? 0;
         try
         {
             var info = _ps.DetectProcess();
+            if (_documentProcessId != info.ProcessId)
+            {
+                ResetDocumentState();
+                _documentProbeActionHint = string.Empty;
+                DocumentProbeError = string.Empty;
+                _documentProcessId = info.ProcessId;
+            }
             IsPsRunning = info.IsRunning;
             PsVersion = info.Version;
             PsExecutablePath = info.ExecutablePath;
@@ -501,6 +519,7 @@ public partial class MainViewModel : ViewModelBase
 
             if (!IsPsRunning || !IsBridgeAvailable)
             {
+                _documentProbeActionHint = string.Empty;
                 DocumentProbeError = string.Empty;
                 ResetDocumentState();
                 RefreshCanExecute();
@@ -517,11 +536,12 @@ public partial class MainViewModel : ViewModelBase
                 AppendLog(log.Level.ToString(), log.Message);
             if (!probeResult.Success)
             {
-                RecordDocumentProbeFailure(probeResult.Error);
+                RecordDocumentProbeFailure(probeResult.Error, preserveLastDocument: quiet && HasDocument);
                 return;
             }
             if (!string.IsNullOrEmpty(DocumentProbeError) && ExportStatusText == "文档识别失败，请刷新；详情见日志")
                 ExportStatusText = doc.IsOpen ? "文档识别已恢复，可以导出" : "当前没有打开文档";
+            _documentProbeActionHint = string.Empty;
             DocumentProbeError = string.Empty;
             _lastProbeErrorLogged = string.Empty;
             if (!doc.IsOpen)
@@ -556,7 +576,7 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            RecordDocumentProbeFailure(ex);
+            RecordDocumentProbeFailure(ex, preserveLastDocument: quiet && HasDocument);
         }
         finally
         {
@@ -572,15 +592,19 @@ public partial class MainViewModel : ViewModelBase
         bool suppressNextActivation)
         => enabled && !isBusy && !isRefreshing && !suppressNextActivation;
 
-    public async Task RefreshOnActivationAsync(Func<bool>? isForeground = null)
+    public async Task RefreshOnActivationAsync(Func<bool>? isForeground = null, bool onlyIfChanged = false)
     {
-        var suppress = _suppressNextActivationRefresh;
-        _suppressNextActivationRefresh = false;
+        if (onlyIfChanged && !HasPendingDocumentChanges) return;
+        var suppress = !onlyIfChanged && _suppressNextActivationRefresh;
+        if (!onlyIfChanged) _suppressNextActivationRefresh = false;
         if (!CanRefreshOnActivation(AutoRefreshOnActivated, IsBusy, IsRefreshingStatus, suppress)
             || isForeground?.Invoke() == false) return;
 
-        AppendLog("Debug", "PSexp 主窗口获得前台焦点，执行一次 COM 文档识别（不派发外部脚本）");
+        AppendLog("Debug", onlyIfChanged
+            ? "[document-events] 前台消费变化标记，执行一次 COM 文档识别（不派发外部脚本）"
+            : "PSexp 主窗口获得前台焦点，执行一次 COM 文档识别（不派发外部脚本）");
         await RefreshStatusAsync(silent: true, quiet: true);
+        await EnsureDocumentEventsAsync(isForeground);
     }
 
     private void SuppressNextActivationRefresh() => _suppressNextActivationRefresh = true;
@@ -748,8 +772,8 @@ public partial class MainViewModel : ViewModelBase
     private async Task StartExportAsync()
     {
         if (IsViewSetting) return;
-        await RefreshStatusAsync(silent: true);
-        if (!HasDocument) return;
+        await RefreshStatusAsync(silent: true, quiet: false);
+        if (!HasDocument || !string.IsNullOrEmpty(DocumentProbeError)) return;
 
         var exportSettings = Snapshot();
         AppendLog("Info", $"导出请求 mode={SelectedMode} destination={Destination} parameters={System.Text.Json.JsonSerializer.Serialize(exportSettings)}");
@@ -996,7 +1020,11 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnIsEdgeDockedChanged(bool value) => OnPropertyChanged(nameof(EffectiveTopmost));
 
-    partial void OnAutoRefreshOnActivatedChanged(bool value) => SaveBehaviorSettings();
+    partial void OnAutoRefreshOnActivatedChanged(bool value)
+    {
+        SaveBehaviorSettings();
+        _documentEvents?.SetEnabled(value);
+    }
 
     partial void OnEnableEdgeSnapChanged(bool value) => SaveBehaviorSettings();
 

@@ -11,7 +11,6 @@ public sealed partial class PhotoshopService
 {
     private readonly UxpScriptBridge? _probeUxpBridge;
     private readonly FileLogger? _probeLogger;
-    private bool _useUxpProbe;
     private async Task<(PsDocumentInfo Doc, PsBridgeResult Result)> ProbeWithUxpAsync(CancellationToken ct)
     {
         if (_probeUxpBridge is null)
@@ -54,7 +53,7 @@ public sealed partial class PhotoshopService
                         document.Path = Path.IsPathFullyQualified(document.Path) ? Path.GetDirectoryName(document.Path) ?? "" : "";
                         var logs = new List<PsLogEntry>
                         {
-                            new() { Level = PsLogLevel.Info, Message = "已通过 UXP 完成主动文档识别；自动前台识别仅使用 COM，不派发外部 UXP 脚本。" }
+                            new() { Level = PsLogLevel.Info, Message = "已通过 UXP 完成导出前文档识别；手动刷新与自动识别仅使用 COM，不派发外部 UXP 脚本。" }
                         };
                         foreach (var warning in root.GetProperty("warnings").EnumerateArray())
                             logs.Add(new PsLogEntry { Level = PsLogLevel.Warn, Message = warning.GetString() ?? "" });

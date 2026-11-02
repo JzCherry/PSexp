@@ -18,8 +18,8 @@ internal static class WindowTaskSwitcher
     internal static void RaiseWithoutActivation(Window window)
     {
         if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { } handle) return;
-        // HWND_TOPMOST，保持位置/尺寸，不激活、不改所有者层级；只在准备交接时调用。
-        SetWindowPos(handle.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0200);
+        // 仅在展开起步前提升层级；尊重置顶设置，不激活、不改位置尺寸。
+        SetWindowPos(handle.Handle, window.Topmost ? new IntPtr(-1) : IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 | 0x0200);
     }
 
     [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hwnd,int index);

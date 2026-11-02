@@ -23,6 +23,10 @@ class Program
             return;
         }
 
+        // Match normal Photoshop permissions before creating the singleton or any window/animation state.
+        if (WindowsProcessPermissions.TryRelaunchForPhotoshop(args)) return;
+        args = Array.FindAll(args, argument => argument != WindowsProcessPermissions.RelaunchArgument);
+
         using var singleInstance = new SingleInstanceCoordinator(InstanceName);
         if (!singleInstance.IsPrimary)
         {
