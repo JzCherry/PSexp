@@ -72,7 +72,8 @@ public partial class MainViewModel
                     FilePrefix = category switch { ExportPresetCategory.Layers => _layerImagePrefix, ExportPresetCategory.Artboards => _artboardImagePrefix, ExportPresetCategory.Slices => FileName, _ => null },
                     SlicePrefix = FileName, SliceFolder = SliceFolderName, ArtboardPath = ExportPathOption,
                     LayerRecursive = LayerExportRecursive, LayerSelectedOnly = LayerExportSelectedOnly,
-        LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
+                    LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
+                    LayerScopeSelectedOnly = IsLayerSelectionSelectedOnly,
                     LayerWithDocumentName = false, UseDocumentName = false
                 }
             });
@@ -109,7 +110,7 @@ public partial class MainViewModel
             _presets.DefaultsInitialized = true;
             _presetStateDirty = true;
         }
-        if (migratedPartial || _presetStorage?.NeedsPrefixInputMigration == true) _presetStateDirty = true;
+        if (migratedPartial || _presetStorage?.NeedsPrefixInputMigration == true || _presetStorage?.NeedsLayerScopeMigration == true) _presetStateDirty = true;
         if (_presetStateDirty) _presetStorage?.PreserveOriginalOnNextSave();
         if (migratedPartial) PresetStatusMessage = "旧预设未包含的位置与命名已补为对应板块当前设置。";
     }
@@ -122,7 +123,8 @@ public partial class MainViewModel
         FilePrefix = mode switch { ExportMode.Layers => _layerImagePrefix, ExportMode.AllArtboards or ExportMode.SelectedArtboards => _artboardImagePrefix, ExportMode.Slices => FileName, _ => null },
         SlicePrefix = FileName, SliceFolder = SliceFolderName, ArtboardPath = ExportPathOption,
         LayerRecursive = LayerExportRecursive, LayerSelectedOnly = LayerExportSelectedOnly,
-                    LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
+        LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
+        LayerScopeSelectedOnly = IsLayerSelectionSelectedOnly,
         LayerWithDocumentName = false, UseDocumentName = false
     };
 
@@ -205,7 +207,8 @@ public partial class MainViewModel
             var formatSummary = p.Format == ExportFormat.Png ? "PNG" : $"JPG · {p.Quality}%";
             var summary = formatSummary
                 + (item.Category == ExportPresetCategory.Artboards ? p.Mode == ExportMode.SelectedArtboards ? " · 选中画板" : " · 全部画板" : "")
-                + (item.Category == ExportPresetCategory.Layers ? p.LayerRecursive ? p.LayerSelectedOnly ? " · 选中图层" : " · 全部图层" : p.LayerTopLevelSelectedOnly ? " · 一级图层 · 选中" : " · 一级图层 · 全部" : "");
+                + (item.Category == ExportPresetCategory.Layers
+                    ? (p.LayerRecursive ? " · 图层素材" : " · 画布合成") + (p.LayerScopeSelectedOnly == true ? " · 选中" : " · 全部") : "");
             AvailablePresets.Add(new(item.Id, item.Name, summary, item.Id == CurrentPresetWorkspace.SelectedPresetId) { FormatSummary = formatSummary });
         }
         NotifyPresetProperties();

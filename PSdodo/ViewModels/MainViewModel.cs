@@ -64,8 +64,8 @@ public partial class MainViewModel : ViewModelBase
         AutoRename = s.DefaultAutoRename;
         FileName = s.SliceFilePrefix ?? string.Empty;
         LayerExportRecursive = s.LayerExportRecursive;
-        LayerExportSelectedOnly = s.LayerExportSelectedOnly;
-        LayerTopLevelSelectedOnly = s.LayerTopLevelSelectedOnly;
+        _layerExportSelectedOnly = s.LayerScopeSelectedOnly ?? (s.LayerExportRecursive ? s.LayerExportSelectedOnly : s.LayerTopLevelSelectedOnly);
+        _layerTopLevelSelectedOnly = _layerExportSelectedOnly;
         LayerExportShowHint = s.LayerExportShowHint;
         AutoCheckForUpdates = s.AutoCheckForUpdates;
         AutoDownloadUpdates = s.AutoDownloadUpdates;
@@ -213,20 +213,22 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty] private bool _layerExportSelectedOnly = true;
     [ObservableProperty] private bool _layerTopLevelSelectedOnly;
     public bool ShowLayerSelection => IsLayerMode;
-    public bool IsLayerSelectionSelectedOnly => LayerExportRecursive ? LayerExportSelectedOnly : LayerTopLevelSelectedOnly;
+    public bool IsLayerSelectionSelectedOnly => LayerExportSelectedOnly;
     public string LayerModeHint => !LayerExportRecursive
-        ? LayerTopLevelSelectedOnly ? "导出选中的最外层图层或组。" : "最外层导出，图层组整体保存。"
-        : LayerExportSelectedOnly ? "按图层边界导出选中图层或组。" : "逐层导出，尺寸跟随各图层。";
+        ? "画布合成 · " + (IsLayerSelectionSelectedOnly ? "选中的最外层图层/组" : "全部最外层图层/组")
+        : "图层素材 · " + (IsLayerSelectionSelectedOnly ? "选中的图层/组" : "全部叶子图层");
     public string LayerModeHelpText => LayerModeHint + "\n\n"
         + (!LayerExportRecursive
-            ? "一级图层以完整画布为基底，每个最外层图层或组分别导出；组内保持原有显示状态。选中模式只认最外层选择，选中组内子图层不会自动导出整个组。"
-            : "调用 Photoshop 原生图层导出，按目标图层或组的内容边界保存，不保留整张画布。选中组整体输出；同时选组与子层只输出组。全部模式逐个输出叶子图层。外部背景、水印不作为公共内容合入。")
-        + "\n\n名称以“排除”开头的图层或组不单独导出，排除组内子层也跳过。"
+            ? "画布合成（原一级图层）：保留完整画布，每个最外层图层或组分别与有效可见公共内容合成。组内子层不独立导出；需要导出子层时切换“图层素材”。"
+            : "图层素材：按 Photoshop 原生图层/组边界输出。选中组整体导出，组与子层同时选中只导出组；全部范围逐个导出叶子图层。")
+        + "\n\n两种方式都支持“排除”前缀：该项及其组内子层不单独导出，手动选中也不绕过。真正背景同样不独立导出。"
         + (!LayerExportRecursive
-            ? "背景与排除项保留原有显示状态：可见项可作为每张图的公共背景或水印，隐藏项不显示；仍受父组显示状态影响。导出后恢复原有显示状态。"
-            : "真正背景不单独输出。组作为整体导出时仍包含组内当前有效内容。独立图层依赖其他层的混合、剪贴或调整效果，以 Photoshop 原生导出结果为准；导出后恢复原选择。");
+            ? "\n\n可见的背景/排除项保留显示，可当公共背景或水印；隐藏项保持隐藏，实际受父组与叠放关系影响。导出后恢复原可见性。"
+            : "\n\n外部背景/排除项不作为公共内容合入。选中组仍整体包含组内有效内容；依赖图层的效果以 Photoshop 原生结果为准。导出后恢复原选择。")
+        + "\n\n“选中 / 全部”范围、格式、质量、路径和前缀均共用并记忆，切换方式不用重复设置。";
     partial void OnLayerTopLevelSelectedOnlyChanged(bool value)
     {
+        if (LayerExportSelectedOnly != value) LayerExportSelectedOnly = value;
         NotifyLayerSelectionChanged();
         SaveBehaviorSettings();
     }
@@ -239,13 +241,13 @@ public partial class MainViewModel : ViewModelBase
     }
     partial void OnLayerExportSelectedOnlyChanged(bool value)
     {
+        if (LayerTopLevelSelectedOnly != value) LayerTopLevelSelectedOnly = value;
         NotifyLayerSelectionChanged();
         SaveBehaviorSettings();
     }
     [RelayCommand] private void SetLayerExportSelectedOnly(object? value)
     {
-        if (LayerExportRecursive) LayerExportSelectedOnly = ParseBooleanCommandParameter(value);
-        else LayerTopLevelSelectedOnly = ParseBooleanCommandParameter(value);
+        LayerExportSelectedOnly = ParseBooleanCommandParameter(value);
     }
     partial void OnLayerExportRecursiveChanged(bool value)
     {
@@ -740,6 +742,7 @@ public partial class MainViewModel : ViewModelBase
             LayerExportRecursive = LayerExportRecursive,
             LayerExportSelectedOnly = LayerExportSelectedOnly,
             LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
+            LayerScopeSelectedOnly = IsLayerSelectionSelectedOnly,
             LayerExportShowHint = LayerExportShowHint,
             AutoUseDocNameAsPrefix = false,
             ThemeMode = ThemeMode,
@@ -933,6 +936,8 @@ public partial class MainViewModel : ViewModelBase
             foreach (var log in result.Logs)
                 AppendLog(log.Level.ToString(), log.Message);
             ExportedCount = Math.Max(ExportedCount, result.ExportedCount);
+            var exportWarning = ReadLayerExportWarning(result.ReturnValue);
+            if (!string.IsNullOrWhiteSpace(exportWarning)) AppendLog("Warn", exportWarning);
             if (result.Success)
             {
                 _lastSuccessfulExportDirectory = result.OutputFiles
@@ -940,7 +945,8 @@ public partial class MainViewModel : ViewModelBase
                     .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
                     ?? ResolvedExportPath;
                 CanOpenExportFolder = Directory.Exists(_lastSuccessfulExportDirectory);
-                ExportStatusText = $"{title} 完成 · 共 {ExportedCount} 个文件";
+                ExportStatusText = $"{title} 完成 · 共 {ExportedCount} 个文件"
+                    + (string.IsNullOrWhiteSpace(exportWarning) ? "" : "；" + exportWarning);
                 AppendLog("Info", $"✔ {title} 完成");
             }
             else

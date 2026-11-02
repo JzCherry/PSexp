@@ -1,0 +1,44 @@
+// 两种图层导出共用目标规则：排除前缀控制“不独立导出”，不是隐藏开关。
+function resolveLayerExportTargets(doc, canvas, selectedOnly) {
+    const nodes = [];
+    function visit(items, parents = [], excluded = false) {
+        for (const layer of items) {
+            const blocked = excluded || /^排除/.test(layer.name);
+            const children = layer.layers ? Array.from(layer.layers) : [];
+            nodes.push({ layer, parents, blocked, group: children.length > 0 || layer.kind === "group" });
+            visit(children, [...parents, layer.id], blocked);
+        }
+    }
+    visit(Array.from(doc.layers));
+    const selectedIds = new Set(selectedOnly ? Array.from(doc.activeLayers).map(layer => layer.id) : []);
+    const targets = nodes.filter(node => !node.blocked && !node.layer.isBackgroundLayer &&
+        (canvas ? node.parents.length === 0 && (!selectedOnly || selectedIds.has(node.layer.id))
+            : selectedOnly ? selectedIds.has(node.layer.id) && !node.parents.some(id => selectedIds.has(id)) : !node.group))
+        .map(node => node.layer);
+    const skipped = [];
+    if (selectedOnly) {
+        for (const node of nodes) {
+            if (!selectedIds.has(node.layer.id)) continue;
+            const reason = node.blocked ? /^排除/.test(node.layer.name) ? "名称以“排除”开头" : "位于排除组内"
+                : node.layer.isBackgroundLayer ? "背景不单独导出"
+                : canvas && node.parents.length > 0 ? "位于组内，非最外层对象" : "";
+            if (reason) skipped.push({ name: node.layer.name, reason });
+        }
+    }
+    const details = skipped.slice(0, 3).map(item => "“" + item.name.slice(0, 40) + "”（" + item.reason + "）").join("、")
+        + (skipped.length > 3 ? "等" : "");
+    if (!targets.length) {
+        if (selectedOnly && skipped.length) {
+            const hint = skipped.some(item => item.reason === "位于组内，非最外层对象")
+                ? "请选择最外层图层/组，或切换“图层素材”导出组内对象。"
+                : skipped.some(item => item.reason !== "背景不单独导出")
+                    ? "请选择其他普通图层或组；若要独立导出排除项，请先移除该项及其父组的“排除”前缀。"
+                    : "真正背景不作为独立导出对象，请选择普通图层或组。";
+            throw new Error("所选对象无法导出：" + details + "。" + hint);
+        }
+        throw new Error(selectedOnly ? "未选择可导出对象，请先在 Photoshop 中选择图层或组。"
+            : canvas ? "没有可导出的最外层图层或组；背景与排除分支不单独导出。"
+                : "没有可导出的素材图层；背景与排除分支不单独导出。");
+    }
+    return { nodes, targets, warning: skipped.length ? "已跳过 " + skipped.length + " 个独立导出项：" + details : "" };
+}

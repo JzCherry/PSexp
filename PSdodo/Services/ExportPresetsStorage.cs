@@ -12,6 +12,7 @@ public sealed class ExportPresetsStorage
     private static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
     public string Error { get; private set; } = "";
     public bool NeedsPrefixInputMigration { get; private set; }
+    public bool NeedsLayerScopeMigration { get; private set; }
     public ExportPresetsStorage(string directory) => _path = Path.Combine(directory, "export-presets.json");
 
     public ExportPresetsState Load()
@@ -26,7 +27,11 @@ public sealed class ExportPresetsStorage
                 .Any(item => item.Category != ExportPresetCategory.Quick && item.Parameters?.FilePrefix is null)
                 || (state.Workspaces ?? []).OfType<ExportPresetWorkspace>()
                 .Any(item => item.Category != ExportPresetCategory.Quick && item.Parameters?.FilePrefix is null);
-            if (NeedsPrefixInputMigration) _backupBeforeWrite = true;
+            NeedsLayerScopeMigration = (state.Items ?? []).OfType<ExportPreset>()
+                .Any(item => item.Category == ExportPresetCategory.Layers && item.Parameters?.LayerScopeSelectedOnly is null)
+                || (state.Workspaces ?? []).OfType<ExportPresetWorkspace>()
+                .Any(item => item.Category == ExportPresetCategory.Layers && item.Parameters?.LayerScopeSelectedOnly is null);
+            if (NeedsPrefixInputMigration || NeedsLayerScopeMigration) _backupBeforeWrite = true;
             return ExportPresetCatalog.NormalizeState(state);
         }
         catch (Exception error)

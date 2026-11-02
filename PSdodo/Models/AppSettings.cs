@@ -42,6 +42,7 @@ public sealed class AppSettings
     public bool LayerExportRecursive { get; set; }
     public bool LayerExportSelectedOnly { get; set; } = true;
     public bool LayerTopLevelSelectedOnly { get; set; }
+    public bool? LayerScopeSelectedOnly { get; set; }
 
     /// <summary>兼容旧配置保留；当前版本不再使用 Photoshop 提示窗。</summary>
     public bool LayerExportShowHint { get; set; } = false;

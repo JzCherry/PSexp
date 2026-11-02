@@ -10,6 +10,7 @@ try {
     taskState.path = "{{EXPORT_FOLDER_URL}}";
     await taskFile.write(JSON.stringify(taskState));
     const exportResult = await runExport();
+    taskState.warning = exportResult && typeof exportResult.warning === "string" ? exportResult.warning : "";
     if ({{WAIT_FOR_BACKGROUND_EXPORT}}) {
         // batchPlay 返回不代表后台编码/写盘完成；此处不再以一次空枚举判失败。
         taskState.stage = "命令已提交，等待后台图片写入";

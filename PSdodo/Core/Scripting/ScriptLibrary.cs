@@ -28,7 +28,7 @@ public static class ScriptLibrary
             if (stream is not null)
             {
                 using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
+                return ComposeLayerTargets(logicalName, reader.ReadToEnd());
             }
         }
 
@@ -44,7 +44,7 @@ public static class ScriptLibrary
                 if (stream is not null)
                 {
                     using var reader = new StreamReader(stream);
-                    return reader.ReadToEnd();
+                    return ComposeLayerTargets(logicalName, reader.ReadToEnd());
                 }
             }
         }
@@ -52,6 +52,10 @@ public static class ScriptLibrary
         throw new InvalidOperationException(
             $"找不到嵌入脚本资源: {logicalName}。可用资源: {string.Join(", ", _asm.GetManifestResourceNames())}");
     }
+
+    private static string ComposeLayerTargets(string logicalName, string script)
+        => logicalName is ScriptNames.ExportLayerBatch or ScriptNames.ExportNativeLayers
+            ? GetScript("export/layer_targets") + "\n" + script : script;
 
     /// <summary>正则提取脚本中所有 {{NAME}} 占位符（去重）</summary>
     public static IReadOnlyCollection<string> ExtractPlaceholders(string script)

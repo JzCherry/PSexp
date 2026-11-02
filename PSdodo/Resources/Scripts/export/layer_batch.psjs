@@ -1,4 +1,4 @@
-// 图层导出：一级图层 / 递归叶子图层，共用 UXP 实现。
+// 画布合成（原一级图层）入口；递归参数保留旧调用兼容，当前素材模式使用原生入口。
 // 每次 saveAs 完成后回传文件清单；恢复可见性后才发布 done 回执。
 const { app, core } = require("photoshop");
 const fs = require("uxp").storage.localFileSystem;
@@ -32,29 +32,10 @@ async function report() {
 async function exportBatch(executionContext) {
     if (app.documents.length === 0) throw new Error("没有打开的文档");
     const doc = app.activeDocument;
-    const roots = Array.from(doc.layers);
-    const nodes = [];
-    function visit(items, parents = [], excluded = false) {
-        for (const layer of items) {
-            const blocked = excluded || /^排除/.test(layer.name);
-            const children = layer.layers ? Array.from(layer.layers) : [];
-            nodes.push({ layer, parents, blocked, group: children.length > 0 || layer.kind === "group" });
-            visit(children, [...parents, layer.id], blocked);
-        }
-    }
-    visit(roots);
+    const { nodes, targets, warning } = resolveLayerExportTargets(doc, !recursive, selectedOnly);
+    state.warning = warning;
     const layers = nodes.map(node => node.layer);
     const visibility = new Map(layers.map(layer => [layer.id, layer.visible]));
-    // 选中模式以 Photoshop 原生选择为准；选中组整体输出，避免组与其子层重复导出。
-    const selectedIds = new Set(selectedOnly ? Array.from(doc.activeLayers).map(layer => layer.id) : []);
-    const targets = nodes.filter(node => !node.blocked && !node.layer.isBackgroundLayer &&
-        (!recursive ? node.parents.length === 0 && (!selectedOnly || selectedIds.has(node.layer.id)) : selectedOnly
-            ? selectedIds.has(node.layer.id) && !node.parents.some(id => selectedIds.has(id))
-            : !node.group)).map(node => node.layer);
-    if (targets.length === 0) throw new Error(selectedOnly
-        ? recursive ? "请在 Photoshop 中选择可导出的图层；背景和排除项不会单独导出"
-            : "请在 Photoshop 中选择最外层图层或组；组内子图层、背景和排除项不会单独导出"
-        : "没有符合条件的图层");
     stage = "读取导出目录";
     activePath = exportFolderUrl;
     const folder = await fs.getEntryWithUrl(exportFolderUrl);

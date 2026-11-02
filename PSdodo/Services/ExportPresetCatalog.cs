@@ -57,6 +57,7 @@ public static class ExportPresetCatalog
             LayerRecursive = preset.Category == ExportPresetCategory.Layers && p.LayerRecursive,
             LayerSelectedOnly = preset.Category != ExportPresetCategory.Layers || p.LayerSelectedOnly,
             LayerTopLevelSelectedOnly = preset.Category == ExportPresetCategory.Layers && p.LayerTopLevelSelectedOnly,
+            LayerScopeSelectedOnly = preset.Category == ExportPresetCategory.Layers ? p.LayerScopeSelectedOnly : null,
             LayerWithDocumentName = !preset.IncludeNaming || preset.Category != ExportPresetCategory.Layers || p.LayerWithDocumentName,
             UseDocumentName = preset.IncludeNaming && preset.Category == ExportPresetCategory.Layers && p.UseDocumentName
         };
@@ -65,6 +66,7 @@ public static class ExportPresetCatalog
     public static ExportPresetParameters Normalize(ExportPresetParameters? value, ExportPresetCategory category)
     {
         value ??= new();
+        var scope = value.LayerScopeSelectedOnly ?? (value.LayerRecursive ? value.LayerSelectedOnly : value.LayerTopLevelSelectedOnly);
         var prefix = category switch
         {
             ExportPresetCategory.Layers => LayerPrefixNaming.ResolveInput(value.FilePrefix, value.LayerPrefixMode, value.ImageName, value.LayerWithDocumentName, value.UseDocumentName),
@@ -85,6 +87,9 @@ public static class ExportPresetCatalog
             FilePrefix = category == ExportPresetCategory.Quick ? null : prefix,
             SlicePrefix = category == ExportPresetCategory.Slices ? prefix : value.SlicePrefix ?? "", SliceFolder = value.SliceFolder ?? "",
             LayerPrefixMode = prefixMode,
+            LayerScopeSelectedOnly = category == ExportPresetCategory.Layers ? scope : null,
+            LayerSelectedOnly = category == ExportPresetCategory.Layers ? scope : value.LayerSelectedOnly,
+            LayerTopLevelSelectedOnly = category == ExportPresetCategory.Layers ? scope : value.LayerTopLevelSelectedOnly,
             LayerWithDocumentName = category == ExportPresetCategory.Layers ? prefixMode == LayerPrefixMode.DocumentName : value.LayerWithDocumentName,
             UseDocumentName = category == ExportPresetCategory.Layers ? prefixMode == LayerPrefixMode.DocumentName : value.UseDocumentName
         };
@@ -99,7 +104,7 @@ public static class ExportPresetCatalog
         if (preset.IncludeDestination && (expected.Destination != current.Destination
             || (expected.Destination == ExportDestination.Custom && expected.CustomPath != current.CustomPath))) return false;
         if (preset.Category == ExportPresetCategory.Artboards && (expected.Mode != current.Mode || expected.ArtboardPath != current.ArtboardPath)) return false;
-        if (preset.Category == ExportPresetCategory.Layers && (expected.LayerRecursive != current.LayerRecursive || expected.LayerSelectedOnly != current.LayerSelectedOnly || expected.LayerTopLevelSelectedOnly != current.LayerTopLevelSelectedOnly)) return false;
+        if (preset.Category == ExportPresetCategory.Layers && (expected.LayerRecursive != current.LayerRecursive || expected.LayerScopeSelectedOnly != current.LayerScopeSelectedOnly)) return false;
         if (preset.Category == ExportPresetCategory.Slices && expected.SliceFolder != current.SliceFolder) return false;
         if (!preset.IncludeNaming) return true;
         return preset.Category switch

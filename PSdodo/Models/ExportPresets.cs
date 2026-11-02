@@ -20,6 +20,7 @@ public sealed record ExportPresetParameters
     public bool LayerRecursive { get; init; }
     public bool LayerSelectedOnly { get; init; } = true;
     public bool LayerTopLevelSelectedOnly { get; init; }
+    public bool? LayerScopeSelectedOnly { get; init; }
     public bool LayerWithDocumentName { get; init; } = true;
     public bool UseDocumentName { get; init; }
 }

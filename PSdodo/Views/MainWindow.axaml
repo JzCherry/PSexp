@@ -442,10 +442,10 @@
                                             <StackPanel IsVisible="{Binding IsLayerMode}" Spacing="8">
                                                 <controls:SegmentOptionRow Spacing="12">
                                                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                                        <TextBlock Text="导出模式" Classes="label" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="导出方式" Classes="label" VerticalAlignment="Center"/>
                                                         <Button Classes="tool" Width="24" Height="24" MinWidth="24" MinHeight="24" Padding="0"
                                                             ToolTip.Tip="{Binding LayerModeHelpText}" AutomationProperties.Name="图层导出说明"
-                                                            AutomationProperties.HelpText="悬停或点击查看一级图层、选择范围与排除规则">
+                                                            AutomationProperties.HelpText="悬停或点击查看画布合成、图层素材与排除规则">
                                                             <Viewbox Width="14" Height="14">
                                                                 <Canvas Width="16" Height="16">
                                                                     <Path Data="M8,1 A7,7 0 1 1 8,15 A7,7 0 1 1 8,1 M6,6 A2,2 0 1 1 9,7.7 L8,8.5 L8,10"
@@ -466,17 +466,17 @@
                                                     </StackPanel>
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding LayerExportRecursive}" IsEnabled="{Binding !IsExporting}">
                                                         <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="False"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="一级图层" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="True"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="图层" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="False" ToolTip.Tip="保留画布尺寸，最外层图层/组与公共背景、水印分别合成。"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="画布合成" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="True" ToolTip.Tip="按图层或图层组自身边界导出素材。"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="图层素材" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
                                                         </controls:SegmentPanel>
                                                     </controls:AnimatedSegmentTrack>
                                                 </controls:SegmentOptionRow>
                                                 <controls:SegmentOptionRow Spacing="12" IsVisible="{Binding ShowLayerSelection}">
-                                                    <TextBlock Text="导出对象" Classes="label"/>
+                                                    <TextBlock Text="导出范围" Classes="label"/>
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding IsLayerSelectionSelectedOnly}" IsEnabled="{Binding !IsExporting}">
                                                         <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="True"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="选中图层" Classes="mode-label" Foreground="{Binding IsLayerSelectionSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="False"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="全部图层" Classes="mode-label" Foreground="{Binding IsLayerSelectionSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="True"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="选中" Classes="mode-label" Foreground="{Binding IsLayerSelectionSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="False"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="全部" Classes="mode-label" Foreground="{Binding IsLayerSelectionSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
                                                         </controls:SegmentPanel>
                                                     </controls:AnimatedSegmentTrack>
                                                 </controls:SegmentOptionRow>
@@ -721,7 +721,7 @@
                                         <TextBlock Text="任务状态" FontWeight="SemiBold"/>
                                         <TextBlock Grid.Column="1" Classes="hint" Text="{Binding ExportedCount, StringFormat='已生成 {0} 个文件'}"/>
                                     </Grid>
-                                    <TextBlock Text="{Binding ExportStatusText}" TextWrapping="Wrap" FontSize="12"/>
+                                    <TextBlock Text="{Binding ExportStatusText}" ToolTip.Tip="{Binding ExportStatusText}" TextWrapping="Wrap" FontSize="12"/>
                                     <controls:ContinuousBorder CornerRadius="2" IsVisible="{Binding IsExporting}"><ProgressBar CornerRadius="0" IsIndeterminate="True"/></controls:ContinuousBorder>
                                 </StackPanel>
                             </controls:ContinuousBorder>

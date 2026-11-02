@@ -21,26 +21,16 @@ async function selectLayerIds(ids) {
 async function runExport() {
     if (app.documents.length === 0) throw new Error("没有打开的文档");
     let expectedFileCount = 0;
+    let warning = "";
     await core.executeAsModal(async context => {
         const doc = app.activeDocument;
         const originalIds = Array.from(doc.activeLayers).map(layer => layer.id);
         const selectedIds = new Set(originalIds);
-        const nodes = [];
-        function visit(items, parents = [], excluded = false) {
-            for (const layer of items) {
-                const blocked = excluded || /^排除/.test(layer.name);
-                const children = layer.layers ? Array.from(layer.layers) : [];
-                nodes.push({ layer, parents, blocked, group: children.length > 0 || layer.kind === "group" });
-                visit(children, [...parents, layer.id], blocked);
-            }
-        }
-        visit(Array.from(doc.layers));
-        const targets = nodes.filter(node => !node.blocked && !node.layer.isBackgroundLayer &&
-            (selectedOnly ? selectedIds.has(node.layer.id) && !node.parents.some(id => selectedIds.has(id)) : !node.group));
-        if (!targets.length) throw new Error(selectedOnly
-            ? "请选择可导出的图层或组；背景与排除项不单独导出" : "没有符合条件的图层");
+        const resolved = resolveLayerExportTargets(doc, false, selectedOnly);
+        const targets = resolved.targets;
+        warning = resolved.warning;
         expectedFileCount = targets.length;
-        const targetIds = targets.map(node => node.layer.id);
+        const targetIds = targets.map(layer => layer.id);
         const sameSelection = ids => ids.length === originalIds.length && ids.every(id => selectedIds.has(id));
         let failure;
         try {
@@ -72,5 +62,5 @@ async function runExport() {
         }
         if (failure) throw failure;
     }, { commandName: "Export Layers" });
-    return { expectedFileCount };
+    return { expectedFileCount, warning };
 }

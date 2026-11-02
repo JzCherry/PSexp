@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const template = fs.readFileSync(path.join(__dirname, "../../PSdodo/Resources/Scripts/export/layer_batch.psjs"), "utf8");
+const template = fs.readFileSync(path.join(__dirname, "../../PSdodo/Resources/Scripts/export/layer_targets.psjs"), "utf8")
+    + "\n" + fs.readFileSync(path.join(__dirname, "../../PSdodo/Resources/Scripts/export/layer_batch.psjs"), "utf8");
 
 async function run(options = {}) {
     const layers = options.layers || [
