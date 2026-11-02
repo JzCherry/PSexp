@@ -45,7 +45,7 @@ public partial class MainViewModel
 
     private void QueueParameterMemory()
     {
-        if (!_settingsInitialized) return;
+        if (!_settingsInitialized || _applyingPreset) return;
         if (_windowAnimationActive)
         {
             _parameterMemoryDeferred = true;

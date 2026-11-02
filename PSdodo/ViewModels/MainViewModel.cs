@@ -84,6 +84,7 @@ public partial class MainViewModel : ViewModelBase
         AvailableFormats = Enum.GetValues<ExportFormat>();
         AvailableModes = Enum.GetValues<ExportMode>();
 
+        InitializePresets(s);
         InitializeDocumentEvents();
         // 构造时只准备事件接收器；首次前台成功识别后才注册 Photoshop 事件。
     }
@@ -382,6 +383,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>导出模式切换时刷新派生属性通知</summary>
     partial void OnSelectedModeChanged(ExportMode value)
     {
+        SwitchPresetWorkspace(value);
         if (value == ExportMode.QuickExport) ImageName = _quickImageName;
         else if (value == ExportMode.Layers) ImageName = _layerImagePrefix;
         QueueParameterMemory();
@@ -738,16 +740,19 @@ public partial class MainViewModel : ViewModelBase
         return true;
     }
 
-    private void SaveBehaviorSettings()
+    private bool SaveBehaviorSettings()
     {
-        if (!_settingsInitialized) return;
-        if (!_settings.Save(CreateAppSettings()))
+        if (!_settingsInitialized || _applyingPreset) return true;
+        var settingsSaved = _settings.Save(CreateAppSettings());
+        var presetsSaved = SavePresetState();
+        if (!settingsSaved || !presetsSaved)
         {
             ExportStatusText = "设置自动保存失败";
             SettingsStatusText = "自动保存失败，请检查数据目录写入权限";
             AppendLog("Error", "设置自动保存失败，请检查数据目录写入权限");
         }
         else SettingsStatusText = "偏好设置已自动保存";
+        return settingsSaved && presetsSaved;
     }
 
     // ---------- 命令：左侧导航 - 选择导出模式 ----------
