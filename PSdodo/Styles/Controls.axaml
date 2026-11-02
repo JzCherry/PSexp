@@ -129,6 +129,26 @@
         <Setter Property="Foreground" Value="{StaticResource Brush.TextPrimary}"/>
     </Style>
 
+    <Style Selector="Button.tool.pin-toggle">
+        <Setter Property="ToolTip.Tip" Value="窗口置顶"/>
+        <Setter Property="AutomationProperties.HelpText" Value="窗口置顶已关闭"/>
+    </Style>
+    <!-- User pin state stays visible after pointer exit and through hover/press. -->
+    <Style Selector="Button.tool.pin-toggle.pinned">
+        <Setter Property="Background" Value="{DynamicResource Brush.SegmentSelected}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.SegmentSelectedBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="ToolTip.Tip" Value="已置顶，点击取消置顶"/>
+        <Setter Property="AutomationProperties.HelpText" Value="窗口置顶已开启"/>
+    </Style>
+    <Style Selector="Button.tool.pin-toggle.pinned /template/ ContentPresenter#PART_ContinuousPresenter">
+        <Setter Property="Background" Value="{DynamicResource Brush.SegmentSelected}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.SegmentSelectedBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
     <Style Selector="Button.mode">
         <Setter Property="Height" Value="{StaticResource Control.ModeHeight}"/>
         <Setter Property="MinHeight" Value="{StaticResource Control.ModeHeight}"/>
@@ -278,6 +298,19 @@
         <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
     </Style>
 
+    <!-- Search owns a single continuous shell; Fluent's inner focus border must not paint another rectangle. -->
+    <Style Selector="controls|ContinuousBorder.settings-search">
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
+    </Style>
+    <Style Selector="controls|ContinuousBorder.settings-search:focus-within">
+        <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
+    </Style>
+    <Style Selector="TextBox.settings-search-input /template/ Border#PART_BorderElement, TextBox.settings-search-input:pointerover /template/ Border#PART_BorderElement, TextBox.settings-search-input:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
     <!-- Notched Quality Cell Meter Styles -->
     <Style Selector="Button.qcell">
         <Setter Property="Height" Value="{StaticResource Control.StandardHeight}"/>
@@ -356,6 +389,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
     </Style>
     <Style Selector="ToolTip">
+        <Setter Property="MaxWidth" Value="320"/>
         <Setter Property="Foreground" Value="{StaticResource Brush.TextPrimary}"/>
         <Setter Property="Template">
             <ControlTemplate>
@@ -363,6 +397,7 @@
                     BorderThickness="1" CornerRadius="8" Padding="10,6">
                     <ContentPresenter Name="PART_TipPresenter" Content="{TemplateBinding Content}"
                         ContentTemplate="{TemplateBinding ContentTemplate}"
+                        MaxWidth="{TemplateBinding MaxWidth}" TextWrapping="Wrap" TextTrimming="None" MaxLines="0"
                         Foreground="{StaticResource Brush.TextPrimary}"/>
                 </controls:ContinuousBorder>
             </ControlTemplate>
@@ -370,6 +405,9 @@
     </Style>
     <Style Selector="ToolTip TextBlock, ToolTip /template/ TextBlock">
         <Setter Property="Foreground" Value="{StaticResource Brush.TextPrimary}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="TextTrimming" Value="None"/>
+        <Setter Property="MaxLines" Value="0"/>
     </Style>
     <Style Selector="ScrollViewer.subtle-scroll /template/ ScrollBar:vertical">
         <Setter Property="Theme" Value="{StaticResource SubtleVerticalScrollBar}"/>
@@ -429,6 +467,32 @@
         <Setter Property="Background" Value="{StaticResource Brush.CaptionClosePressed}"/>
         <Setter Property="Foreground" Value="{StaticResource Brush.OnAccent}"/>
     </Style>
+    <!-- In-card collision policy: matches the adjacent 24-DIP format/quality badges. -->
+    <Style Selector="Button.compact-action">
+        <Setter Property="Height" Value="{StaticResource Control.BadgeHeight}"/>
+        <Setter Property="MinHeight" Value="{StaticResource Control.BadgeHeight}"/>
+        <Setter Property="MaxHeight" Value="{StaticResource Control.BadgeHeight}"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Caption}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.SegmentInner}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+    </Style>
+    <Style Selector="Button.compact-action:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
+        <Setter Property="Background" Value="{DynamicResource Brush.SegmentHover}"/>
+    </Style>
+    <Style Selector="Button.compact-action.active">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+    </Style>
+    <Style Selector="Button.compact-action.active /template/ ContentPresenter#PART_ContinuousPresenter">
+        <Setter Property="Background" Value="{DynamicResource Brush.SegmentSelected}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.SegmentSelectedBorder}"/>
+    </Style>
+
     <Style Selector="TextBlock.meta-label">
         <Setter Property="FontSize" Value="{StaticResource FontSize.Micro}"/>
         <Setter Property="Height" Value="16"/>
@@ -450,7 +514,7 @@
     <Style Selector="Window.quality-motion Button.qcell:pointerover controls|ContinuousBorder.quality-mark">
         <Setter Property="RenderTransform" Value="scale(1.12, 1.12)"/>
     </Style>
-    <!-- One semantic card per settings group; controls stay aligned in compact rows. -->
+    <!-- Each settings group is a label above one card; rows keep the label-left / control-right alignment. -->
     <Style Selector="StackPanel.settings-page">
         <Setter Property="Spacing" Value="{StaticResource Space.Md}"/>
     </Style>
@@ -461,26 +525,32 @@
         <Setter Property="CornerRadius" Value="{StaticResource Radius.SettingsCard}"/>
         <Setter Property="Padding" Value="14"/>
     </Style>
-    <Style Selector="controls|ContinuousBorder.settings-section controls|AnimatedSegmentTrack.choice-track, controls|AnimatedSegmentTrack.settings-tabs">
+    <Style Selector="controls|ContinuousBorder.settings-section controls|AnimatedSegmentTrack.choice-track">
         <Setter Property="Background" Value="{DynamicResource Brush.SettingsTrack}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
         <Setter Property="IndicatorBrush" Value="{DynamicResource Brush.SettingsSelected}"/>
         <Setter Property="IndicatorBorderBrush" Value="{StaticResource Brush.Accent}"/>
     </Style>
     <!-- 悬停由轨道绘制，按钮模板不能盖住蓝色选中块。 -->
-    <Style Selector="controls|ContinuousBorder.settings-section Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, controls|ContinuousBorder.settings-section Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter, controls|AnimatedSegmentTrack.settings-tabs Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, controls|AnimatedSegmentTrack.settings-tabs Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
+    <Style Selector="controls|ContinuousBorder.settings-section Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, controls|ContinuousBorder.settings-section Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="Transparent"/>
     </Style>
     <Style Selector="Grid.settings-row">
-        <Setter Property="MinHeight" Value="40"/>
+        <Setter Property="MinHeight" Value="48"/>
+    </Style>
+    <Style Selector="Grid.settings-directory-row">
+        <Setter Property="MinHeight" Value="60"/>
+    </Style>
+    <Style Selector="TextBlock.directory-caption">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
     </Style>
     <Style Selector="Grid.settings-row > Panel">
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
-    <Style Selector="TextBlock.settings-group-title">
-        <Setter Property="FontSize" Value="{StaticResource FontSize.Subtitle}"/>
+    <Style Selector="TextBlock.settings-group-label">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Caption}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Foreground" Value="{StaticResource Brush.TextPrimary}"/>
+        <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
     </Style>
     <Style Selector="TextBlock.settings-caption">
         <Setter Property="FontSize" Value="{StaticResource FontSize.Caption}"/>
@@ -490,12 +560,26 @@
     </Style>
     <Style Selector="controls|ContinuousBorder.settings-separator">
         <Setter Property="Height" Value="1"/>
-        <Setter Property="Background" Value="{StaticResource Brush.Divider}"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.Divider}"/>
+        <Setter Property="Opacity" Value="0.75"/>
+        <Setter Property="OpacityMask">
+            <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                <GradientStop Offset="0" Color="Transparent"/>
+                <GradientStop Offset="0.06" Color="Black"/>
+                <GradientStop Offset="0.94" Color="Black"/>
+                <GradientStop Offset="1" Color="Transparent"/>
+            </LinearGradientBrush>
+        </Setter>
     </Style>
-    <Style Selector="controls|ContinuousBorder.settings-summary">
-        <Setter Property="Background" Value="{DynamicResource Brush.SettingsTrack}"/>
-        <Setter Property="CornerRadius" Value="{StaticResource Radius.Sm}"/>
-        <Setter Property="Padding" Value="12"/>
+    <Style Selector="Button.settings-check-action">
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="MaxHeight" Value="28"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Caption}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.SegmentInner}"/>
     </Style>
     <Style Selector="Button.settings-directory-action">
         <Setter Property="HorizontalAlignment" Value="Stretch"/>

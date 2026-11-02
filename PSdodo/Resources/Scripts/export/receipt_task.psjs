@@ -1,4 +1,4 @@
-// 快速导出等待同步 saveAs；画板的原生命令只回报“已提交”，由 C# 确认后台文件完成。
+// 快速导出等待同步 saveAs；画板/图层的原生命令只回报“已提交”，由 C# 确认后台文件完成。
 {{SCRIPT_BODY}}
 const taskFs = require("uxp").storage.localFileSystem;
 const taskState = { done: false, success: false, files: [], error: "" };

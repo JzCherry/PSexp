@@ -15,5 +15,6 @@
         <FluentTheme />
         <StyleInclude Source="avares://PSexpV3/Styles/Controls.axaml"/>
         <StyleInclude Source="avares://PSexpV3/Styles/Tray.axaml"/>
+        <StyleInclude Source="avares://PSexpV3/Styles/TextInputMenus.axaml"/>
     </Application.Styles>
 </Application>

@@ -16,4 +16,5 @@ public static class ScriptNames
     public const string ExportLayers = "export/layers";
     public const string ExportSlices = "export/native_slices";
     public const string ExportLayerBatch = "export/layer_batch";
+    public const string ExportNativeLayers = "export/native_layers";
 }

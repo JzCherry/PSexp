@@ -24,7 +24,6 @@ namespace PsExporter.Views;
 public partial class MainWindow : Window
 {
     private bool _isDraggingQualityMeter;
-    private readonly WheelStepAccumulator _qualityWheel = new();
     private readonly ScaleTransform _qualityFeedbackScale = new();
     private readonly Stopwatch _qualityFeedbackClock = new();
     private bool _qualityFeedbackFramePending;
@@ -193,13 +192,24 @@ public partial class MainWindow : Window
         AttachQualityMeterPointerHandlers();
         QualityMeter.RenderTransform = _qualityFeedbackScale;
         QualityMeter.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-        QualityControl.AddHandler(PointerWheelChangedEvent, OnQualityWheelChanged, RoutingStrategies.Tunnel);
-        QualityControl.PointerExited += (_, _) => _qualityWheel.Reset();
         AddHandler(
             PointerPressedEvent,
             OnWindowPointerPressed,
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
+        AddHandler(KeyDownEvent, (_, args) =>
+        {
+            if (args.Handled || args.Key != Key.Escape) return;
+            // Close the innermost text menu first, keeping the preset name editor open.
+            if (DismissTextInputMenu()) { args.Handled = true; return; }
+            if (DataContext is MainViewModel { IsViewSetting: true } settingsModel)
+            {
+                if (SettingsSearchInput.IsFocused && settingsModel.HasSettingsSearchText)
+                { settingsModel.ClearSettingsSearchCommand.Execute(null); args.Handled = true; }
+                return;
+            }
+            if (!IsPopupInputSource(args.Source) && ExportPresets.DismissOnEscape()) args.Handled = true;
+        }, RoutingStrategies.Tunnel);
         SetWindowCornerRound();
     }
 
@@ -240,12 +250,14 @@ public partial class MainWindow : Window
         {
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
+            _animationViewModel.SettingsNavigationRequested -= OnSettingsNavigationRequested;
         }
         _animationViewModel = viewModel;
         if (_animationViewModel is not null)
         {
             _animationViewModel.PropertyChanged += OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable += OnPhotoshopDocumentChanged;
+            _animationViewModel.SettingsNavigationRequested += OnSettingsNavigationRequested;
         }
         UpdateStatusAnimationState(restartActiveClocks: true);
     }
@@ -255,8 +267,10 @@ public partial class MainWindow : Window
         if (e.PropertyName is nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRefreshingStatus)
             && _animationViewModel?.HasPendingDocumentChanges == true)
             QueueForegroundDocumentProbe();
-        if (e.PropertyName == nameof(MainViewModel.AutoRefreshOnActivated)
-            && _animationViewModel?.AutoRefreshOnActivated == true)
+        if ((e.PropertyName == nameof(MainViewModel.AutoRefreshOnActivated)
+                && _animationViewModel?.AutoRefreshOnActivated == true)
+            || (e.PropertyName == nameof(MainViewModel.IsAlwaysOnTop)
+                && _animationViewModel?.IsAlwaysOnTop == true))
         {
             _hasProbedCurrentActivation = false;
             QueueForegroundDocumentProbe();
@@ -274,9 +288,10 @@ public partial class MainWindow : Window
             // 模式的字段数不同，进入新页面从顶部开始，避免沿用画板表单的旧滚动位置。
             ExportScrollViewer.Offset = default;
         }
-        if (e.PropertyName == nameof(MainViewModel.SelectedSettingsSection))
+        if (e.PropertyName == nameof(MainViewModel.SettingsSearchQuery))
+            SettingsScrollViewer.Offset = default;
+        if (e.PropertyName == nameof(MainViewModel.IsViewSetting) && _animationViewModel is { IsViewSetting: true })
         {
-            EndInputEditing();
             SettingsScrollViewer.Offset = default;
             BeginSettingsPageFade();
         }
@@ -427,6 +442,7 @@ public partial class MainWindow : Window
         {
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
+            _animationViewModel.SettingsNavigationRequested -= OnSettingsNavigationRequested;
             _ = _animationViewModel.StopDocumentEventsAsync();
         }
         DataContextChanged -= OnAnimationDataContextChanged;
@@ -827,7 +843,7 @@ public partial class MainWindow : Window
 
     private void OnPhotoshopDocumentChanged(object? sender, EventArgs e)
     {
-        // A background notification only sets a version. No COM call or UI change without foreground eligibility.
+        // Visible pinned windows consume notifications without focus; other windows wait for foreground eligibility.
         Dispatcher.UIThread.Post(QueueForegroundDocumentProbe, DispatcherPriority.Loaded);
     }
 
@@ -835,7 +851,11 @@ public partial class MainWindow : Window
     {
         if (_isClosing || _isRestoringPlacement || !_placementRestorationCompleted
             || _isHiddenToTray || _isSnapAnimating || _edgeVisualSettling || (_isDocked && !_isDockRevealed)
-            || !IsActive || !IsVisible || Opacity <= 0 || WindowState == WindowState.Minimized) return false;
+            || !IsVisible || Opacity <= 0 || WindowState == WindowState.Minimized) return false;
+        if (DataContext is not MainViewModel { AutoRefreshOnActivated: true } model) return false;
+        // Use the user's pin preference, not temporary topmost used by export/docking.
+        if (model.IsAlwaysOnTop) return true;
+        if (!IsActive) return false;
         if (!OperatingSystem.IsWindows()) return true;
         var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         return handle != IntPtr.Zero && GetForegroundWindow() == handle;
@@ -843,7 +863,7 @@ public partial class MainWindow : Window
 
     private void QueueForegroundDocumentProbe()
     {
-        // One queued check per activation, after placement/animation has settled. Never poll or activate the window here.
+        // Queue on activation, pin enable or a notifier event, after rendering settles. Never poll or activate here.
         Dispatcher.UIThread.Post(async () =>
         {
             if (!CanReadForegroundDocument() || DataContext is not MainViewModel current
@@ -937,20 +957,6 @@ public partial class MainWindow : Window
         QualityMeter.PointerCaptureLost += OnQualityMeterPointerCaptureLost;
     }
 
-    private void OnQualityWheelChanged(object? sender, PointerWheelEventArgs e)
-    {
-        if (DataContext is not MainViewModel vm || !QualityControl.IsEffectivelyEnabled) return;
-        e.Handled = true;
-        var steps = _qualityWheel.Add(e.Delta, increaseUp: true);
-        if (steps == 0) return;
-        // 输入框尚在编辑时先结束编辑，再使用滚轮的最终值，避免失焦覆盖调节结果。
-        if (QualityInput.IsFocused)
-            EndInputEditing(e.KeyModifiers);
-        var quality = Math.Clamp(vm.Quality + steps, 1, 100);
-        if (quality != vm.Quality) vm.Quality = quality;
-        else PulseQualityMeter();
-    }
-
     private void PulseQualityMeter()
     {
         if (_isClosing || !QualityMeter.IsEffectivelyVisible || _isSnapAnimating) return;
@@ -1007,6 +1013,16 @@ public partial class MainWindow : Window
     }
     private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // Menu clicks must not clear the selected text, cancel the preset editor or drag the window.
+        if (e.Handled || IsPopupInputSource(e.Source)) return;
+        var pointer = e.GetCurrentPoint(this).Properties;
+        if ((pointer.IsLeftButtonPressed || pointer.IsRightButtonPressed || pointer.IsMiddleButtonPressed)
+            && DismissTextInputMenu())
+        {
+            e.Handled = true; // Closing click must not activate a control under the menu.
+            return;
+        }
+        if (ExportPresets.DismissOnOutsidePointer(e)) return;
         // 先结束原输入框编辑，再让目标控件处理点击；不吞掉目标控件的事件。
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && FindFocusedEditor() is { } editor)
         {
@@ -1016,7 +1032,7 @@ public partial class MainWindow : Window
             if (!insideEditor) EndInputEditing(e.KeyModifiers);
         }
         if (e.Handled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-            || _isSnapAnimating || DataContext is not MainViewModel { EnableBlankDrag: true }) return;
+            || _isSnapAnimating || DataContext is not MainViewModel) return;
         var position = e.GetPosition(this);
         if (!MainContentBorder.Bounds.Deflate(new Thickness(8)).Contains(position)) return;
         for (var visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
@@ -1029,6 +1045,28 @@ public partial class MainWindow : Window
         BeginUndockForDrag();
         BeginMoveDrag(e);
         e.Handled = true;
+    }
+
+    private bool IsPopupInputSource(object? source)
+    {
+        if (source is not Visual visual) return false;
+        // Native popups have a separate visual root; embedded popups expose a presenter ancestor.
+        if (TopLevel.GetTopLevel(visual) is { } root && !ReferenceEquals(root, this)) return true;
+        for (Visual? current = visual; current is not null; current = current.GetVisualParent())
+            if (current is FlyoutPresenter or MenuFlyoutPresenter or Avalonia.Controls.ContextMenu) return true;
+        return false;
+    }
+
+    private bool DismissTextInputMenu()
+    {
+        // Scan only on a pointer press/Esc: no polling, clipboard monitoring or global input hooks.
+        foreach (var visual in RootGrid.GetVisualDescendants())
+        {
+            if (visual is not TextBox editor) continue;
+            if (editor.ContextFlyout is { IsOpen: true } flyout) { flyout.Hide(); return true; }
+            if (editor.ContextMenu is { IsOpen: true } menu) { menu.Close(); return true; }
+        }
+        return false;
     }
 
     public void ActivateFromExternalRequest()

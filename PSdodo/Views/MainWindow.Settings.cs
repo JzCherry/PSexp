@@ -1,6 +1,9 @@
 using System;
 using System.Diagnostics;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using PsExporter.ViewModels;
 
 namespace PsExporter.Views;
 
@@ -10,10 +13,29 @@ public partial class MainWindow
     private readonly Stopwatch _settingsPageFadeClock = new();
     private double _settingsPageFadeStart;
 
+    private void OnSettingsNavigationRequested(bool updates)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isClosing || DataContext is not MainViewModel { IsViewSetting: true }) return;
+            SettingsScrollViewer.Offset = default;
+            if (updates) { SettingsPageHost.UpdateLayout(); SettingsVersionCard.BringIntoView(); }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void OnClearSettingsSearchClick(object? sender, RoutedEventArgs args)
+    {
+        // Let the command clear the query first, then return typing focus to the visible search box.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (IsActive && SettingsSearchInput.IsEffectivelyVisible) SettingsSearchInput.Focus();
+        }, DispatcherPriority.Loaded);
+    }
+
     private void BeginSettingsPageFade()
     {
         if (_isClosing) return;
-        // Restart from the current opacity when categories are changed quickly.
+        // One restrained fade when opening settings; search typing never animates the whole list.
         _settingsPageFadeStart = Math.Min(SettingsPageHost.Opacity, 0.72);
         SettingsPageHost.Opacity = _settingsPageFadeStart;
         _settingsPageFadeClock.Restart();

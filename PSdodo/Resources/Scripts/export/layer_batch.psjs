@@ -48,10 +48,13 @@ async function exportBatch(executionContext) {
     // 选中模式以 Photoshop 原生选择为准；选中组整体输出，避免组与其子层重复导出。
     const selectedIds = new Set(selectedOnly ? Array.from(doc.activeLayers).map(layer => layer.id) : []);
     const targets = nodes.filter(node => !node.blocked && !node.layer.isBackgroundLayer &&
-        (!recursive ? node.parents.length === 0 : selectedOnly
+        (!recursive ? node.parents.length === 0 && (!selectedOnly || selectedIds.has(node.layer.id)) : selectedOnly
             ? selectedIds.has(node.layer.id) && !node.parents.some(id => selectedIds.has(id))
             : !node.group)).map(node => node.layer);
-    if (targets.length === 0) throw new Error(selectedOnly ? "请在 Photoshop 中选择可导出的图层；排除项不会导出" : "没有符合条件的图层");
+    if (targets.length === 0) throw new Error(selectedOnly
+        ? recursive ? "请在 Photoshop 中选择可导出的图层；背景和排除项不会单独导出"
+            : "请在 Photoshop 中选择最外层图层或组；组内子图层、背景和排除项不会单独导出"
+        : "没有符合条件的图层");
     stage = "读取导出目录";
     activePath = exportFolderUrl;
     const folder = await fs.getEntryWithUrl(exportFolderUrl);

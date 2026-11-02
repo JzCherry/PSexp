@@ -10,6 +10,7 @@ public partial class MainViewModel
     [ObservableProperty] private string _sliceFolderName = string.Empty;
     private string _quickImageName = string.Empty;
     private string _layerImagePrefix = string.Empty;
+    private string _artboardImagePrefix = string.Empty;
     private DispatcherTimer? _parameterMemoryTimer;
     private bool _windowAnimationActive;
     private System.Threading.Tasks.TaskCompletionSource? _windowAnimationIdle;
@@ -96,11 +97,18 @@ public partial class MainViewModel
     }
     partial void OnExportPathOptionChanged(ExportPathOption value) => QueueParameterMemory();
     partial void OnQualityChanged(int value) => QueueParameterMemory();
-    partial void OnIsViewSettingChanged(bool value) => QueueParameterMemory();
+    partial void OnIsViewSettingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanOpenOrCloseSettings));
+        OnPropertyChanged(nameof(SettingsToggleHint));
+        QueueParameterMemory();
+    }
     partial void OnImageNameChanged(string value)
     {
         if (SelectedMode == ExportMode.QuickExport) _quickImageName = value;
         else if (SelectedMode == ExportMode.Layers) _layerImagePrefix = value;
+        else if (SelectedMode is ExportMode.AllArtboards or ExportMode.SelectedArtboards) _artboardImagePrefix = value;
+        else if (SelectedMode == ExportMode.Slices) FileName = value;
         QueueParameterMemory();
     }
 }

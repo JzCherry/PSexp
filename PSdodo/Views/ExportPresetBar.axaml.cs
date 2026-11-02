@@ -1,10 +1,11 @@
 using System.ComponentModel;
-using System.Text;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using PsExporter.Services;
 using PsExporter.ViewModels;
 
 namespace PsExporter.Views;
@@ -12,7 +13,6 @@ namespace PsExporter.Views;
 public partial class ExportPresetBar : UserControl
 {
     private MainViewModel? _model;
-    private static readonly FilePickerFileType PresetFileType = new("PSexp 预设") { Patterns = ["*.json"] };
     public ExportPresetBar()
     {
         InitializeComponent();
@@ -25,7 +25,7 @@ public partial class ExportPresetBar : UserControl
     }
     private void OnModelChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName != nameof(MainViewModel.IsPresetEditorOpen) || _model?.IsPresetEditorOpen != true) return;
+        if (args.PropertyName is not (nameof(MainViewModel.IsPresetEditorOpen) or nameof(MainViewModel.IsPresetNameEditor)) || _model?.IsPresetEditorOpen != true) return;
         Dispatcher.UIThread.Post(() =>
         {
             if (_model?.IsPresetEditorOpen == true && _model.IsPresetNameEditor && IsEffectivelyVisible
@@ -41,43 +41,58 @@ public partial class ExportPresetBar : UserControl
     }
     private void OnMenuActionClick(object? sender, RoutedEventArgs args)
         => Dispatcher.UIThread.Post(() => PresetMore.Flyout?.Hide()); // Let the button command finish before detaching popup content.
-    private async void OnImportClick(object? sender, RoutedEventArgs args)
+    // Called before the window's blank-area drag handler. A dismissal click must
+    // neither start a native move loop nor activate a control underneath a menu.
+    public bool DismissOnOutsidePointer(PointerPressedEventArgs args)
     {
-        PresetMore.Flyout?.Hide();
-        if (_model is not { CanManagePresets: true } model || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage) return;
-        try
+        if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return false;
+        var source = args.Source as Visual;
+        for (var visual = source; visual is not null; visual = visual.GetVisualParent())
+            if (visual is FlyoutPresenter or MenuFlyoutPresenter or Avalonia.Controls.ContextMenu) return false; // Keep popup content interactive.
+
+        if (PresetPicker.Flyout?.IsOpen == true || PresetMore.Flyout?.IsOpen == true)
         {
-            var files = await storage.OpenFilePickerAsync(new() { Title = "导入 PSexp 预设", AllowMultiple = false, FileTypeFilter = [PresetFileType] });
-            if (files.Count == 0 || !model.CanManagePresets) return;
-            using var stream = await files[0].OpenReadAsync();
-            using var bytes = new MemoryStream();
-            var buffer = new byte[8192];
-            int count;
-            while ((count = await stream.ReadAsync(buffer)) > 0)
-            {
-                if (bytes.Length + count > ExportPresetCatalog.MaximumImportBytes) throw new InvalidDataException("预设文件超过 1 MB。");
-                bytes.Write(buffer, 0, count);
-            }
-            model.ImportPresets(Encoding.UTF8.GetString(bytes.ToArray()).TrimStart('\uFEFF'));
+            HideMenus();
+            args.Handled = true;
+            return true;
         }
-        catch (Exception error) { model.ReportPresetError("导入失败：" + error.Message); }
+        if (_model?.IsPresetEditorOpen != true || IsWithin(source, PresetEditor)) return false;
+        // Header buttons keep their normal action (save, picker, more).
+        for (var visual = source; visual is not null && IsWithin(visual, this); visual = visual.GetVisualParent())
+            if (visual is Button) return false;
+
+        CancelEditor();
+        args.Handled = true;
+        return true;
     }
-    private async void OnExportClick(object? sender, RoutedEventArgs args)
+
+    public bool DismissOnEscape()
     {
+        if (PresetPicker.Flyout?.IsOpen == true || PresetMore.Flyout?.IsOpen == true)
+        { HideMenus(); return true; }
+        if (_model?.IsPresetEditorOpen != true) return false;
+        CancelEditor();
+        return true;
+    }
+
+    private void HideMenus()
+    {
+        PresetPicker.Flyout?.Hide();
         PresetMore.Flyout?.Hide();
-        if (_model is not { CanManagePresets: true, HasCustomPresets: true } model || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage) return;
-        try
-        {
-            // Capture the category before the asynchronous file picker can allow another module to be selected.
-            var json = model.ExportCurrentPresets();
-            var file = await storage.SaveFilePickerAsync(new() { Title = "导出本板块预设", SuggestedFileName = "PSexp-" + model.CurrentModeTitle + "-预设.json", DefaultExtension = "json", FileTypeChoices = [PresetFileType] });
-            if (file is null) return;
-            using var stream = await file.OpenWriteAsync();
-            if (stream.CanSeek) stream.SetLength(0);
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-            await writer.WriteAsync(json);
-            model.ReportPresetError("预设已导出。");
-        }
-        catch (Exception error) { model.ReportPresetError("导出预设失败：" + error.Message); }
+    }
+
+    private void CancelEditor()
+    {
+        _model?.CancelPresetEditorCommand.Execute(null);
+        // Do not leave keyboard focus on the now-hidden name input.
+        if (TopLevel.GetTopLevel(this) is Window { IsActive: true } window)
+            window.Focus();
+    }
+
+    private static bool IsWithin(Visual? visual, Visual ancestor)
+    {
+        for (; visual is not null; visual = visual.GetVisualParent())
+            if (ReferenceEquals(visual, ancestor)) return true;
+        return false;
     }
 }

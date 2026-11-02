@@ -11,6 +11,7 @@ public sealed class ExportPresetsStorage
     private bool _backupBeforeWrite;
     private static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
     public string Error { get; private set; } = "";
+    public bool NeedsPrefixInputMigration { get; private set; }
     public ExportPresetsStorage(string directory) => _path = Path.Combine(directory, "export-presets.json");
 
     public ExportPresetsState Load()
@@ -21,6 +22,11 @@ public sealed class ExportPresetsStorage
             var state = JsonSerializer.Deserialize<ExportPresetsState>(File.ReadAllText(_path), Options)
                 ?? throw new InvalidDataException("预设数据为空。");
             if (state.Version != 1) throw new InvalidDataException("预设数据版本不受支持。");
+            NeedsPrefixInputMigration = (state.Items ?? []).OfType<ExportPreset>()
+                .Any(item => item.Category != ExportPresetCategory.Quick && item.Parameters?.FilePrefix is null)
+                || (state.Workspaces ?? []).OfType<ExportPresetWorkspace>()
+                .Any(item => item.Category != ExportPresetCategory.Quick && item.Parameters?.FilePrefix is null);
+            if (NeedsPrefixInputMigration) _backupBeforeWrite = true;
             return ExportPresetCatalog.NormalizeState(state);
         }
         catch (Exception error)
@@ -30,6 +36,8 @@ public sealed class ExportPresetsStorage
             return new();
         }
     }
+
+    public void PreserveOriginalOnNextSave() => _backupBeforeWrite = true;
 
     public bool Save(ExportPresetsState state)
     {

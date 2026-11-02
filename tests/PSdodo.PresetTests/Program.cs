@@ -38,7 +38,7 @@ internal static class PresetTests
         }
         try
         {
-            Check(vm.AvailablePresets.Count == 1 && vm.AvailablePresets[0].IsBuiltIn, "built-in default in first workspace");
+            Check(vm.AvailablePresets.Count == 1 && !vm.AvailablePresets[0].IsSelected, "editable initial default in first workspace");
             vm.Quality = 91; vm.ImageName = "hero"; Save("电商");
             Check(!vm.IsPresetModified, "saved preset matches current parameters");
             vm.Quality = 88;
@@ -67,17 +67,25 @@ internal static class PresetTests
             vm.DeletePresetCommand.Execute(null); vm.ConfirmPresetEditorCommand.Execute(null);
             Check(vm.AvailablePresets.Count == 1 && vm.Quality == 79 && vm.ImageName == "hero", "delete preserves current export parameters");
             vm.ApplyPresetCommand.Execute(vm.AvailablePresets[0]);
-            Check(vm.Quality == 80 && !vm.RenamePresetCommand.CanExecute(null) && !vm.DeletePresetCommand.CanExecute(null), "built-in default restores values and stays read-only");
+            Check(vm.Quality == 80 && vm.RenamePresetCommand.CanExecute(null) && vm.DeletePresetCommand.CanExecute(null), "initial default can be renamed and deleted");
+            vm.Quality = 83; vm.SaveCurrentPresetCommand.Execute(null);
+            Check(!vm.IsPresetModified && vm.Quality == 83, "initial default can be updated");
+            vm.RenamePresetCommand.Execute(null); vm.PresetEditorName = "我的默认"; vm.ConfirmPresetEditorCommand.Execute(null);
+            Check(vm.PresetDisplayName == "我的默认", "initial default can be renamed");
+            vm.DeletePresetCommand.Execute(null); vm.ConfirmPresetEditorCommand.Execute(null);
+            var afterDelete = Make();
+            Check(afterDelete.AvailablePresets.Count == 0, "deleted default does not reappear after restart");
+            afterDelete.StopDocumentEventsAsync().GetAwaiter().GetResult();
             vm.ExportPath = "C:\\private-output"; vm.Destination = ExportDestination.Custom; vm.ImageName = "private-name";
-            vm.SaveNewPresetCommand.Execute(null); vm.PresetEditorName = "通用"; vm.PresetIncludeDestination = false; vm.PresetIncludeNaming = false; vm.ConfirmPresetEditorCommand.Execute(null);
+            vm.SaveNewPresetCommand.Execute(null); vm.PresetEditorName = "通用"; vm.ConfirmPresetEditorCommand.Execute(null);
             var json = vm.ExportCurrentPresets();
-            Check(!json.Contains("private-output") && !json.Contains("private-name"), "excluded path and naming are absent from portable files");
+            Check(json.Contains("private-output") && json.Contains("private-name"), "new presets always save destination and naming");
             vm.Destination = ExportDestination.Desktop; vm.ImageName = "keep-this";
-            Check(!vm.IsPresetModified, "excluded fields do not mark a preset modified");
+            Check(vm.IsPresetModified, "destination and naming participate in modified state");
             vm.ApplyPresetCommand.Execute(vm.AvailablePresets.First(item => item.Name == "通用"));
-            Check(vm.Destination == ExportDestination.Desktop && vm.ImageName == "keep-this", "applying an optional-field preset preserves those current fields");
+            Check(!vm.IsPresetEditorOpen && vm.Destination == ExportDestination.Custom && vm.ImageName == "private-name", "switch immediately restores complete options without a confirmation editor");
             vm.ImportPresets(json);
-            Check(vm.AvailablePresets.Count == 3 && vm.AvailablePresets.Any(item => item.Name == "通用 (2)"), "import merges duplicate names without replacing existing presets");
+            Check(vm.AvailablePresets.Count == 2 && vm.AvailablePresets.Any(item => item.Name == "通用 (2)"), "import merges duplicate names without replacing existing presets");
             var count = vm.AvailablePresets.Count;
             var invalid = JsonNode.Parse(json)!; invalid["version"] = 2; vm.ImportPresets(invalid.ToJsonString());
             Check(vm.AvailablePresets.Count == count, "unknown file version leaves catalog intact");

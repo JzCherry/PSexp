@@ -25,7 +25,8 @@ public partial class MainViewModel
     public string UpdateCurrentVersion => "当前版本：" + UpdateService.CurrentVersion;
     public string UpdateActionText => _downloadedUpdate is null ? "下载并更新" : "重启并更新";
     public bool IsUpdateAvailable => _pendingUpdate is not null;
-    public string SettingsUpdateHint => IsUpdateAvailable ? "发现新版本，进入设置更新" : "设置";
+    public string SettingsToggleHint => IsViewSetting ? "返回导出界面"
+        : IsUpdateAvailable ? "发现新版本，进入设置更新" : "设置";
     public bool CanCheckUpdates => !IsUpdateBusy;
     public bool CanApplyUpdate => !IsBusy && !IsExporting && !IsUpdateBusy && _pendingUpdate is not null;
     private UpdateService Updater => _updater ??= new UpdateService(_fileLogger);
@@ -38,7 +39,7 @@ public partial class MainViewModel
     {
         OnPropertyChanged(nameof(CanApplyUpdate));
         OnPropertyChanged(nameof(IsUpdateAvailable));
-        OnPropertyChanged(nameof(SettingsUpdateHint));
+        OnPropertyChanged(nameof(SettingsToggleHint));
         CheckForUpdatesCommand.NotifyCanExecuteChanged();
         ApplyUpdateCommand.NotifyCanExecuteChanged();
     }

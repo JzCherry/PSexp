@@ -1,0 +1,74 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:PsExporter.Controls"
+        xmlns:conv="using:Avalonia.Controls.Converters"
+        xmlns:data="using:Avalonia.Data.Converters">
+    <Styles.Resources>
+        <conv:PlatformKeyGestureConverter x:Key="TextInputGestureConverter"/>
+        <ControlTheme x:Key="TextInputMenuPresenter" TargetType="MenuFlyoutPresenter">
+            <Setter Property="MinWidth" Value="204"/>
+            <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+            <Setter Property="ItemsPanel">
+                <ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate>
+            </Setter>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid Margin="8">
+                        <controls:ContinuousBorder Background="{DynamicResource Brush.Surface}"
+                            BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Sm}" Padding="5" BoxShadow="{StaticResource Shadow.Menu}">
+                            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"
+                                KeyboardNavigation.TabNavigation="Continue"/>
+                        </controls:ContinuousBorder>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+        <!-- This theme is for leaf text-edit actions only; normal/tray menus keep their own theme. -->
+        <ControlTheme x:Key="TextInputMenuItem" TargetType="MenuItem">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSize.Body}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <controls:ContinuousBorder Background="{TemplateBinding Background}"
+                        CornerRadius="{StaticResource Radius.SegmentInner}" Padding="{TemplateBinding Padding}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="28">
+                            <ContentPresenter Name="PART_HeaderPresenter" Content="{TemplateBinding Header}"
+                                ContentTemplate="{TemplateBinding HeaderTemplate}" Foreground="{TemplateBinding Foreground}"
+                                RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Name="PART_InputGestureText"
+                                Text="{TemplateBinding InputGesture, Converter={StaticResource TextInputGestureConverter}}"
+                                Foreground="{DynamicResource Brush.TextSecondary}" FontSize="{StaticResource FontSize.Caption}"
+                                VerticalAlignment="Center" TextWrapping="NoWrap"/>
+                        </Grid>
+                    </controls:ContinuousBorder>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover, ^:selected">
+                <Setter Property="Background" Value="{DynamicResource Brush.SegmentHover}"/>
+            </Style>
+            <Style Selector="^:disabled">
+                <Setter Property="Opacity" Value="{StaticResource Opacity.Disabled}"/>
+            </Style>
+        </ControlTheme>
+    </Styles.Resources>
+    <Style Selector="TextBox">
+        <Setter Property="ContextFlyout">
+            <MenuFlyout ShowMode="Standard" OverlayDismissEventPassThrough="False"
+                FlyoutPresenterTheme="{StaticResource TextInputMenuPresenter}" ItemContainerTheme="{StaticResource TextInputMenuItem}">
+                <MenuItem Header="剪切" Command="{Binding $parent[TextBox].Cut}" IsEnabled="{Binding $parent[TextBox].CanCut}"
+                    IsVisible="{Binding !$parent[TextBox].IsReadOnly}" InputGesture="{x:Static TextBox.CutGesture}"/>
+                <MenuItem Header="复制" Command="{Binding $parent[TextBox].Copy}" IsEnabled="{Binding $parent[TextBox].CanCopy}"
+                    InputGesture="{x:Static TextBox.CopyGesture}"/>
+                <MenuItem Header="粘贴" Command="{Binding $parent[TextBox].Paste}" IsEnabled="{Binding $parent[TextBox].CanPaste}"
+                    IsVisible="{Binding !$parent[TextBox].IsReadOnly}" InputGesture="{x:Static TextBox.PasteGesture}"/>
+                <MenuItem Header="全选" Command="{Binding $parent[TextBox].SelectAll}" InputGesture="Ctrl+A"
+                    IsEnabled="{Binding $parent[TextBox].Text, Converter={x:Static data:StringConverters.IsNotNullOrEmpty}}"/>
+            </MenuFlyout>
+        </Setter>
+    </Style>
+</Styles>

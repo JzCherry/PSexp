@@ -8,9 +8,9 @@
         <ControlTheme x:Key="PresetFlyoutTheme" TargetType="FlyoutPresenter">
             <Setter Property="Template">
                 <ControlTemplate>
-                    <controls:ContinuousBorder Margin="8" Padding="6"
+                    <controls:ContinuousBorder Margin="8" Padding="4"
                         Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
-                        CornerRadius="{StaticResource Radius.Sm}" BoxShadow="{StaticResource Shadow.Window}">
+                        CornerRadius="{StaticResource Radius.Sm}" BoxShadow="{StaticResource Shadow.Menu}">
                         <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
                     </controls:ContinuousBorder>
                 </ControlTemplate>
@@ -23,10 +23,20 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="10,5"/>
-            <Setter Property="Height" Value="52"/>
-            <Setter Property="MinHeight" Value="52"/>
-            <Setter Property="MaxHeight" Value="52"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="MaxHeight" Value="32"/>
+        </Style>
+        <Style Selector="Button.preset-choice:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.SegmentHover}"/>
+        </Style>
+        <Style Selector="Button.preset-choice.selected">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+        </Style>
+        <Style Selector="Button.preset-choice.selected /template/ ContentPresenter#PART_ContinuousPresenter">
+            <Setter Property="Background" Value="{DynamicResource Brush.SegmentSelected}"/>
         </Style>
         <Style Selector="Button.preset-action">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
@@ -39,29 +49,29 @@
     <controls:ContinuousBorder Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
         BorderThickness="1" CornerRadius="{StaticResource Radius.Md}" Padding="12">
         <StackPanel Spacing="10">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" IsEnabled="{Binding CanManagePresets}">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" IsEnabled="{Binding CanManagePresets}">
                 <TextBlock Text="预设" VerticalAlignment="Center" FontSize="{StaticResource FontSize.Control}"/>
                 <Button x:Name="PresetPicker" Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                    Padding="10,0" ToolTip.Tip="{Binding PresetPickerHint}" AutomationProperties.Name="选择当前板块的导出预设">
+                    Padding="8,0" IsEnabled="{Binding HasCustomPresets}" ToolTip.Tip="{Binding PresetPickerHint}" AutomationProperties.Name="选择当前板块的导出预设">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                         <TextBlock Text="{Binding PresetDisplayName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="已修改" IsVisible="{Binding IsPresetModified}"
-                            Foreground="{DynamicResource Brush.TextSecondary}" FontSize="{StaticResource FontSize.Caption}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="*" IsVisible="{Binding IsPresetModified}"
+                            ToolTip.Tip="修改未保存" Foreground="{DynamicResource Brush.Accent}" VerticalAlignment="Center"/>
                         <Path Grid.Column="2" Data="M0 0L4 4L8 0" Width="8" Height="4" Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.4" VerticalAlignment="Center"/>
                     </Grid>
                     <Button.Flyout>
-                        <Flyout Placement="BottomEdgeAlignedLeft" FlyoutPresenterTheme="{StaticResource PresetFlyoutTheme}">
-                            <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Classes="subtle-scroll">
-                                <ItemsControl ItemsSource="{Binding AvailablePresets}" Width="{Binding #PresetRoot.Bounds.Width}" MaxWidth="420" MinWidth="200">
+                        <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedLeft" FlyoutPresenterTheme="{StaticResource PresetFlyoutTheme}">
+                            <ScrollViewer MaxHeight="224" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Classes="subtle-scroll">
+                                <ItemsControl ItemsSource="{Binding AvailablePresets}" Width="{Binding #PresetPicker.Bounds.Width}" MaxWidth="300" MinWidth="200">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ExportPresetListItem">
-                                            <Button Classes="preset-choice" Click="OnPresetChoiceClick" ToolTip.Tip="{Binding Name}">
-                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontWeight="Medium"/>
-                                                        <TextBlock Text="{Binding Summary}" TextTrimming="CharacterEllipsis" FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                    </StackPanel>
-                                                    <TextBlock Grid.Column="1" Text="内置" IsVisible="{Binding IsBuiltIn}" VerticalAlignment="Center"
+                                            <Button Classes="preset-choice" Classes.selected="{Binding IsSelected}" Click="OnPresetChoiceClick" ToolTip.Tip="{Binding Hint}">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                    <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontSize.Body}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding FormatSummary}" VerticalAlignment="Center"
                                                         FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.TextSecondary}"/>
                                                 </Grid>
                                             </Button>
@@ -72,21 +82,26 @@
                         </Flyout>
                     </Button.Flyout>
                 </Button>
-                <Button Grid.Column="2" Content="{Binding PresetSaveLabel}" Command="{Binding SaveCurrentPresetCommand}" Padding="10,0"/>
-                <Button Grid.Column="3" x:Name="PresetMore" Width="32" Padding="0" ToolTip.Tip="管理当前板块预设" AutomationProperties.Name="预设更多操作">
+                <Button Grid.Column="2" IsVisible="{Binding ShowPresetUpdate}" Width="28" MinWidth="0" Padding="0"
+                    Command="{Binding SaveCurrentPresetCommand}" ToolTip.Tip="更新预设：保存当前修改"
+                    AutomationProperties.Name="更新预设，保存当前修改">
+                    <Path Data="M2 1H10L13 4V13H1V1Z M4 1V5H10V1 M4 13V8H10V13"
+                        Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource Brush.Accent}" StrokeThickness="1.3"/>
+                </Button>
+                <Button Grid.Column="3" Width="32" MinWidth="0" Padding="0" Command="{Binding SaveNewPresetCommand}"
+                    ToolTip.Tip="新建预设" AutomationProperties.Name="新建预设，保存当前完整选项">
+                    <Path Data="M7 1V13 M1 7H13" Width="14" Height="14" Stretch="Uniform"
+                        Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.5"/>
+                </Button>
+                <Button Grid.Column="4" x:Name="PresetMore" IsEnabled="{Binding CanEditCurrentPreset}" Width="32" Padding="0" ToolTip.Tip="管理当前板块预设" AutomationProperties.Name="预设更多操作">
                     <Path Data="M1 4A1 1 0 1 0 3 4A1 1 0 1 0 1 4 M7 4A1 1 0 1 0 9 4A1 1 0 1 0 7 4 M13 4A1 1 0 1 0 15 4A1 1 0 1 0 13 4"
                         Fill="{DynamicResource Brush.TextSecondary}" Width="16" Height="8"/>
                     <Button.Flyout>
-                        <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource PresetFlyoutTheme}">
-                            <StackPanel Width="200" Spacing="2">
-                                <Button Classes="preset-action" Content="另存为预设" Command="{Binding SaveNewPresetCommand}" Click="OnMenuActionClick"/>
+                        <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource PresetFlyoutTheme}">
+                            <StackPanel Width="176" Spacing="2">
                                 <Button Classes="preset-action" Content="复制为新预设" Command="{Binding CopyPresetCommand}" Click="OnMenuActionClick"/>
-                                <Button Classes="preset-action" Content="恢复已保存参数" Command="{Binding RestorePresetCommand}" Click="OnMenuActionClick"/>
                                 <Button Classes="preset-action" Content="重命名" Command="{Binding RenamePresetCommand}" Click="OnMenuActionClick"/>
                                 <Button Classes="preset-action" Content="删除预设" Command="{Binding DeletePresetCommand}" Click="OnMenuActionClick"/>
-                                <controls:ContinuousBorder Height="1" Margin="8,4" Background="{DynamicResource Brush.Divider}"/>
-                                <Button Classes="preset-action" Content="导入预设…" Click="OnImportClick"/>
-                                <Button Classes="preset-action" Content="导出本板块预设…" IsEnabled="{Binding HasCustomPresets}" Click="OnExportClick"/>
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>
@@ -94,33 +109,13 @@
             </Grid>
             <TextBlock Text="{Binding PresetStatusMessage}" IsVisible="{Binding HasPresetStatus}" TextWrapping="Wrap" MaxLines="2" ToolTip.Tip="{Binding PresetStatusMessage}"
                 FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.TextSecondary}"/>
-            <StackPanel Spacing="10" IsVisible="{Binding IsPresetEditorOpen}" IsEnabled="{Binding CanManagePresets}">
+            <StackPanel x:Name="PresetEditor" Spacing="10" IsVisible="{Binding IsPresetEditorOpen}" IsEnabled="{Binding CanManagePresets}">
                 <controls:ContinuousBorder Height="1" Background="{DynamicResource Brush.Divider}"/>
                 <TextBlock Text="{Binding PresetEditorTitle}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                 <TextBox x:Name="PresetNameInput" Text="{Binding PresetEditorName, Mode=TwoWay}" MaxLength="40" IsVisible="{Binding IsPresetNameEditor}"
                     PlaceholderText="输入预设名称" AutomationProperties.Name="预设名称"/>
                 <TextBlock Text="当前参数会保留，仅删除已保存的预设。" TextWrapping="Wrap" IsVisible="{Binding IsPresetDeleteEditor}"
                     FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                <StackPanel Spacing="8" IsVisible="{Binding IsPresetSaveEditor}">
-                    <controls:SegmentOptionRow>
-                        <TextBlock Text="包含位置" VerticalAlignment="Center" FontSize="{StaticResource FontSize.Control}"/>
-                        <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding PresetIncludeDestination}">
-                            <controls:SegmentPanel>
-                                <Button Classes="seg" Command="{Binding SetPresetIncludeDestinationCommand}" CommandParameter="False" AutomationProperties.Name="保存输出位置：关闭"><TextBlock Text="关闭" HorizontalAlignment="Center" VerticalAlignment="Center"/></Button>
-                                <Button Classes="seg" Command="{Binding SetPresetIncludeDestinationCommand}" CommandParameter="True" AutomationProperties.Name="保存输出位置：开启"><TextBlock Text="开启" HorizontalAlignment="Center" VerticalAlignment="Center"/></Button>
-                            </controls:SegmentPanel>
-                        </controls:AnimatedSegmentTrack>
-                    </controls:SegmentOptionRow>
-                    <controls:SegmentOptionRow>
-                        <TextBlock Text="包含命名" VerticalAlignment="Center" FontSize="{StaticResource FontSize.Control}"/>
-                        <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding PresetIncludeNaming}">
-                            <controls:SegmentPanel>
-                                <Button Classes="seg" Command="{Binding SetPresetIncludeNamingCommand}" CommandParameter="False" AutomationProperties.Name="保存命名内容：关闭"><TextBlock Text="关闭" HorizontalAlignment="Center" VerticalAlignment="Center"/></Button>
-                                <Button Classes="seg" Command="{Binding SetPresetIncludeNamingCommand}" CommandParameter="True" AutomationProperties.Name="保存命名内容：开启"><TextBlock Text="开启" HorizontalAlignment="Center" VerticalAlignment="Center"/></Button>
-                            </controls:SegmentPanel>
-                        </controls:AnimatedSegmentTrack>
-                    </controls:SegmentOptionRow>
-                </StackPanel>
                 <TextBlock Text="{Binding PresetEditorError}" IsVisible="{Binding HasPresetEditorError}" TextWrapping="Wrap"
                     FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.Danger}"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">

@@ -12,11 +12,14 @@ public sealed record ExportPresetParameters
     public ExportDestination Destination { get; init; } = ExportDestination.DocumentFolder;
     public string CustomPath { get; init; } = "";
     public string ImageName { get; init; } = "";
+    public string? FilePrefix { get; init; }
+    public LayerPrefixMode? LayerPrefixMode { get; init; }
     public string SlicePrefix { get; init; } = "";
     public string SliceFolder { get; init; } = "";
     public ExportPathOption ArtboardPath { get; init; } = ExportPathOption.ImageOnly;
     public bool LayerRecursive { get; init; }
     public bool LayerSelectedOnly { get; init; } = true;
+    public bool LayerTopLevelSelectedOnly { get; init; }
     public bool LayerWithDocumentName { get; init; } = true;
     public bool UseDocumentName { get; init; }
 }
@@ -41,6 +44,7 @@ public sealed class ExportPresetWorkspace
 public sealed class ExportPresetsState
 {
     public int Version { get; set; } = 1;
+    public bool DefaultsInitialized { get; set; }
     public List<ExportPreset> Items { get; set; } = [];
     public List<ExportPresetWorkspace> Workspaces { get; set; } = [];
 }

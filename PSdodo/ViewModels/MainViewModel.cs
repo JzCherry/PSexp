@@ -47,27 +47,30 @@ public partial class MainViewModel : ViewModelBase
         _format = Enum.IsDefined(s.DefaultFormat) ? s.DefaultFormat : ExportFormat.Jpg;
         _isJpgFormat = _format == ExportFormat.Jpg;
         _quickImageName = s.QuickImageName ?? string.Empty;
-        _layerImagePrefix = s.LayerImagePrefix ?? string.Empty;
+        _layerImagePrefix = LayerPrefixNaming.ResolveInput(s.LayerFilePrefix, s.LayerPrefixMode, s.LayerImagePrefix, s.LayerExportWithDocName, s.AutoUseDocNameAsPrefix);
+        _artboardImagePrefix = s.ArtboardFilePrefix ?? string.Empty;
         _selectedMode = Enum.IsDefined(s.LastExportMode) ? s.LastExportMode : ExportMode.QuickExport;
         _exportPathOption = Enum.IsDefined(s.LastArtboardPathOption) ? s.LastArtboardPathOption : ExportPathOption.ImageOnly;
-        _imageName = _selectedMode == ExportMode.Layers ? _layerImagePrefix : _quickImageName;
+        _imageName = _selectedMode switch
+        {
+            ExportMode.Layers => _layerImagePrefix,
+            ExportMode.AllArtboards or ExportMode.SelectedArtboards => _artboardImagePrefix,
+            ExportMode.Slices => s.SliceFilePrefix ?? "",
+            _ => _quickImageName
+        };
         _sliceFolderName = s.SliceFolderName ?? string.Empty;
-        _selectedSettingsSection = Math.Clamp(s.LastSettingsSection, 0, 3);
         _isViewSetting = s.ShowSettingsOnStartup;
         Quality = s.DefaultQuality;
         AutoRename = s.DefaultAutoRename;
         FileName = s.SliceFilePrefix ?? string.Empty;
-        LayerExportWithDocName = s.LayerExportWithDocName;
         LayerExportRecursive = s.LayerExportRecursive;
         LayerExportSelectedOnly = s.LayerExportSelectedOnly;
+        LayerTopLevelSelectedOnly = s.LayerTopLevelSelectedOnly;
         LayerExportShowHint = s.LayerExportShowHint;
         AutoCheckForUpdates = s.AutoCheckForUpdates;
         AutoDownloadUpdates = s.AutoDownloadUpdates;
         CloseToTray = s.CloseToTray;
-        EnableBlankDrag = s.EnableBlankDrag;
-        EnableQualityHoverAnimation = s.EnableQualityHoverAnimation;
         DockRetractDelayMs = s.DockRetractDelayMs is 250 or 420 or 800 ? s.DockRetractDelayMs : 420;
-        AutoUseDocNameAsPrefix = s.AutoUseDocNameAsPrefix;
         IsAlwaysOnTop = s.StartAlwaysOnTop;
         AutoRefreshOnActivated = s.AutoRefreshOnActivated;
         EnableEdgeSnap = s.EnableEdgeSnap;
@@ -188,6 +191,10 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private bool _autoRename = true;
 
+    public string AutoRenameHint => AutoRename
+        ? "同名自动改名已开启：追加序号，保留已有文件。点击改为覆盖同名文件。"
+        : "同名自动改名已关闭：覆盖同名文件。点击改为追加序号、保留已有文件。";
+
     [ObservableProperty]
     private string _fileName = string.Empty;
 
@@ -204,35 +211,63 @@ public partial class MainViewModel : ViewModelBase
     public bool IsLayerMode => SelectedMode == ExportMode.Layers;
     [ObservableProperty] private bool _layerExportRecursive;
     [ObservableProperty] private bool _layerExportSelectedOnly = true;
-    public bool ShowLayerSelection => IsLayerMode && LayerExportRecursive;
-    public string LayerModeHint => !LayerExportRecursive ? "最外层导出，图层组整体保存。"
-        : LayerExportSelectedOnly ? "导出 PS 中选中的图层或图层组。" : "逐层导出，包含组内图层。";
+    [ObservableProperty] private bool _layerTopLevelSelectedOnly;
+    public bool ShowLayerSelection => IsLayerMode;
+    public bool IsLayerSelectionSelectedOnly => LayerExportRecursive ? LayerExportSelectedOnly : LayerTopLevelSelectedOnly;
+    public string LayerModeHint => !LayerExportRecursive
+        ? LayerTopLevelSelectedOnly ? "导出选中的最外层图层或组。" : "最外层导出，图层组整体保存。"
+        : LayerExportSelectedOnly ? "按图层边界导出选中图层或组。" : "逐层导出，尺寸跟随各图层。";
+    public string LayerModeHelpText => LayerModeHint + "\n\n"
+        + (!LayerExportRecursive
+            ? "一级图层以完整画布为基底，每个最外层图层或组分别导出；组内保持原有显示状态。选中模式只认最外层选择，选中组内子图层不会自动导出整个组。"
+            : "调用 Photoshop 原生图层导出，按目标图层或组的内容边界保存，不保留整张画布。选中组整体输出；同时选组与子层只输出组。全部模式逐个输出叶子图层。外部背景、水印不作为公共内容合入。")
+        + "\n\n名称以“排除”开头的图层或组不单独导出，排除组内子层也跳过。"
+        + (!LayerExportRecursive
+            ? "背景与排除项保留原有显示状态：可见项可作为每张图的公共背景或水印，隐藏项不显示；仍受父组显示状态影响。导出后恢复原有显示状态。"
+            : "真正背景不单独输出。组作为整体导出时仍包含组内当前有效内容。独立图层依赖其他层的混合、剪贴或调整效果，以 Photoshop 原生导出结果为准；导出后恢复原选择。");
+    partial void OnLayerTopLevelSelectedOnlyChanged(bool value)
+    {
+        NotifyLayerSelectionChanged();
+        SaveBehaviorSettings();
+    }
+    private void NotifyLayerSelectionChanged()
+    {
+        OnPropertyChanged(nameof(IsLayerSelectionSelectedOnly));
+        OnPropertyChanged(nameof(LayerModeHint));
+        OnPropertyChanged(nameof(LayerModeHelpText));
+        OnPropertyChanged(nameof(CurrentModeHint));
+    }
     partial void OnLayerExportSelectedOnlyChanged(bool value)
     {
-        OnPropertyChanged(nameof(LayerModeHint));
-        OnPropertyChanged(nameof(CurrentModeHint));
+        NotifyLayerSelectionChanged();
         SaveBehaviorSettings();
     }
     [RelayCommand] private void SetLayerExportSelectedOnly(object? value)
-        => LayerExportSelectedOnly = ParseBooleanCommandParameter(value);
+    {
+        if (LayerExportRecursive) LayerExportSelectedOnly = ParseBooleanCommandParameter(value);
+        else LayerTopLevelSelectedOnly = ParseBooleanCommandParameter(value);
+    }
     partial void OnLayerExportRecursiveChanged(bool value)
     {
         OnPropertyChanged(nameof(ShowLayerSelection));
-        OnPropertyChanged(nameof(LayerModeHint));
-        OnPropertyChanged(nameof(CurrentModeHint));
+        NotifyLayerSelectionChanged();
         SaveBehaviorSettings();
     }
     [RelayCommand] private void SetLayerExportRecursive(object? value)
         => LayerExportRecursive = ParseBooleanCommandParameter(value);
 
     /// <summary>快速导出图片名称、图层导出文件前缀是否可见</summary>
-    public bool IsImageNameVisible => SelectedMode is ExportMode.QuickExport or ExportMode.Layers;
+    public bool IsImageNameVisible => Enum.IsDefined(SelectedMode);
 
     public string ImageNameLabel => SelectedMode == ExportMode.QuickExport ? "图片名称" : "文件前缀";
 
     public string ImageNamePlaceholder => SelectedMode == ExportMode.QuickExport
         ? "留空使用 Photoshop 默认名称"
-        : "留空使用文档名或图层名";
+        : "留空使用原名称";
+
+    public string ImageNameHint => SelectedMode == ExportMode.QuickExport
+        ? "填写完整图片名称；留空使用 Photoshop 默认名称。"
+        : "留空不加前缀；填写后导出为“前缀_原名”，切片无名称时使用序号。";
 
     /// <summary>是否为画板模式（控制导出选项下拉框显示）</summary>
     public bool IsArtboardMode => SelectedMode is ExportMode.AllArtboards or ExportMode.SelectedArtboards;
@@ -324,27 +359,15 @@ public partial class MainViewModel : ViewModelBase
 
     // ---------- 设置页：额外选项 ----------
     [ObservableProperty]
-    private bool _layerExportWithDocName = true;
-
-    [ObservableProperty]
     private bool _layerExportShowHint;
-
-    [ObservableProperty]
-    private bool _autoUseDocNameAsPrefix;
 
     [ObservableProperty]
     private AppThemeMode _themeMode = AppThemeMode.Light;
 
-    [ObservableProperty] private bool _enableBlankDrag = true;
-    [ObservableProperty] private bool _enableQualityHoverAnimation = true;
     [ObservableProperty] private int _dockRetractDelayMs = 420;
 
-    partial void OnEnableBlankDragChanged(bool value) => SaveBehaviorSettings();
-    partial void OnEnableQualityHoverAnimationChanged(bool value) => SaveBehaviorSettings();
     partial void OnDockRetractDelayMsChanged(int value) => SaveBehaviorSettings();
 
-    [RelayCommand] private void SetEnableBlankDrag(object? value) => EnableBlankDrag = ParseBooleanCommandParameter(value);
-    [RelayCommand] private void SetEnableQualityHoverAnimation(object? value) => EnableQualityHoverAnimation = ParseBooleanCommandParameter(value);
     [RelayCommand] private void SetDockRetractDelay(object? value)
     {
         if (int.TryParse(value?.ToString(), out var ms) && ms is 250 or 420 or 800) DockRetractDelayMs = ms;
@@ -365,6 +388,9 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isViewSetting;
 
+    /// <summary>导出中从托盘进设置后，返回仍要可点，所以只有"进入设置"这一侧受忙碌限制。</summary>
+    public bool CanOpenOrCloseSettings => IsViewSetting || !IsBusy;
+
     public ExportFormat[] AvailableFormats { get; }
 
     /// <summary>所有导出模式（左侧导航栏绑定用）</summary>
@@ -384,8 +410,13 @@ public partial class MainViewModel : ViewModelBase
     partial void OnSelectedModeChanged(ExportMode value)
     {
         SwitchPresetWorkspace(value);
-        if (value == ExportMode.QuickExport) ImageName = _quickImageName;
-        else if (value == ExportMode.Layers) ImageName = _layerImagePrefix;
+        ImageName = value switch
+        {
+            ExportMode.Layers => _layerImagePrefix,
+            ExportMode.AllArtboards or ExportMode.SelectedArtboards => _artboardImagePrefix,
+            ExportMode.Slices => FileName,
+            _ => _quickImageName
+        };
         QueueParameterMemory();
         OnPropertyChanged(nameof(IsFileNameVisible));
         OnPropertyChanged(nameof(IsLayerMode));
@@ -393,6 +424,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsImageNameVisible));
         OnPropertyChanged(nameof(ImageNameLabel));
         OnPropertyChanged(nameof(ImageNamePlaceholder));
+        OnPropertyChanged(nameof(ImageNameHint));
         OnPropertyChanged(nameof(IsArtboardMode));
         OnPropertyChanged(nameof(CurrentModeTitle));
         OnPropertyChanged(nameof(CurrentModeHint));
@@ -432,6 +464,7 @@ public partial class MainViewModel : ViewModelBase
     {
         RefreshUpdateCommands();
         OnPropertyChanged(nameof(CanRefreshStatus));
+        OnPropertyChanged(nameof(CanOpenOrCloseSettings));
         RefreshStatusCommand.NotifyCanExecuteChanged();
     }
 
@@ -602,9 +635,10 @@ public partial class MainViewModel : ViewModelBase
         if (!CanRefreshOnActivation(AutoRefreshOnActivated, IsBusy, IsRefreshingStatus, suppress)
             || isForeground?.Invoke() == false) return;
 
-        AppendLog("Debug", onlyIfChanged
-            ? "[document-events] 前台消费变化标记，执行一次 COM 文档识别（不派发外部脚本）"
-            : "PSexp 主窗口获得前台焦点，执行一次 COM 文档识别（不派发外部脚本）");
+        var reason = IsAlwaysOnTop
+            ? onlyIfChanged ? "[document-events] 置顶窗口消费变化标记" : "置顶窗口同步文档"
+            : onlyIfChanged ? "[document-events] 前台消费变化标记" : "PSexp 主窗口获得前台焦点";
+        AppendLog("Debug", reason + "，执行一次 COM 文档识别（不派发外部脚本）");
         await RefreshStatusAsync(silent: true, quiet: true);
         await EnsureDocumentEventsAsync(isForeground);
     }
@@ -613,6 +647,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void RefreshCanExecute()
     {
+        ToggleAutoRenameCommand.NotifyCanExecuteChanged();
         StartExportCommand.NotifyCanExecuteChanged();
         CancelExportCommand.NotifyCanExecuteChanged();
         RefreshStatusCommand.NotifyCanExecuteChanged();
@@ -696,14 +731,17 @@ public partial class MainViewModel : ViewModelBase
             LayerImagePrefix = _layerImagePrefix,
             LastExportMode = SelectedMode,
             LastArtboardPathOption = ExportPathOption,
-            LastSettingsSection = SelectedSettingsSection,
             ShowSettingsOnStartup = IsViewSetting,
             PhotoshopExePath = current.PhotoshopExePath,
-            LayerExportWithDocName = LayerExportWithDocName,
+            LayerFilePrefix = _layerImagePrefix,
+            ArtboardFilePrefix = _artboardImagePrefix,
+            LayerPrefixMode = string.IsNullOrWhiteSpace(_layerImagePrefix) ? PsExporter.Models.LayerPrefixMode.None : PsExporter.Models.LayerPrefixMode.Custom,
+            LayerExportWithDocName = false,
             LayerExportRecursive = LayerExportRecursive,
             LayerExportSelectedOnly = LayerExportSelectedOnly,
+            LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
             LayerExportShowHint = LayerExportShowHint,
-            AutoUseDocNameAsPrefix = AutoUseDocNameAsPrefix,
+            AutoUseDocNameAsPrefix = false,
             ThemeMode = ThemeMode,
             StartAlwaysOnTop = IsAlwaysOnTop,
             AutoRefreshOnActivated = AutoRefreshOnActivated,
@@ -711,8 +749,6 @@ public partial class MainViewModel : ViewModelBase
             AutoCheckForUpdates = AutoCheckForUpdates,
             AutoDownloadUpdates = AutoDownloadUpdates,
             CloseToTray = CloseToTray,
-            EnableBlankDrag = EnableBlankDrag,
-            EnableQualityHoverAnimation = EnableQualityHoverAnimation,
             DockRetractDelayMs = DockRetractDelayMs,
             WindowPlacement = _windowPlacement,
             WindowWidth = _windowWidth,
@@ -764,12 +800,16 @@ public partial class MainViewModel : ViewModelBase
         IsViewSetting = false;
     }
 
-    // ---------- 命令：左侧导航 - 切换到设置视图 ----------
+    // ---------- 命令：标题栏同一枚按钮在导出页与设置页之间切换 ----------
     [RelayCommand]
-    private void ShowSettings()
+    private void ToggleSettingsView()
     {
-        if (IsUpdateAvailable) SelectedSettingsSection = 3;
-        IsViewSetting = true;
+        if (IsViewSetting)
+        {
+            IsViewSetting = false;
+            return;
+        }
+        OpenSettingsPage(IsUpdateAvailable);
     }
 
     // ---------- 命令：开始执行（根据当前选中的模式触发导出） ----------
@@ -954,11 +994,9 @@ public partial class MainViewModel : ViewModelBase
 
     private ExportSettings Snapshot()
     {
-        var effectiveImageName = ResolveLayerImageName(
-            SelectedMode,
-            ImageName,
-            DocumentName,
-            AutoUseDocNameAsPrefix);
+        var prefix = SelectedMode == ExportMode.QuickExport ? "" : ExportFilePrefix.Normalize(ImageName);
+        var effectiveImageName = SelectedMode == ExportMode.QuickExport ? ImageName
+            : SelectedMode == ExportMode.Layers ? prefix : "";
 
         return new ExportSettings
         {
@@ -967,17 +1005,20 @@ public partial class MainViewModel : ViewModelBase
             Format = Format,
             Quality = Quality,
             AutoRename = AutoRename,
-            FileName = SelectedMode == ExportMode.Slices ? FileName : string.Empty,
+            FileName = SelectedMode == ExportMode.Slices ? prefix : string.Empty,
+            FilePrefix = prefix,
             SliceFolderName = SelectedMode == ExportMode.Slices ? SliceFolderName : string.Empty,
             ImageName = effectiveImageName,
-            LayerExportWithDocName = LayerExportWithDocName,
+            LayerExportWithDocName = false,
             LayerExportRecursive = LayerExportRecursive,
             LayerExportSelectedOnly = LayerExportSelectedOnly,
+            LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
             LayerExportShowHint = LayerExportShowHint,
             ExportPathOption = ExportPathOption
         };
     }
 
+    // Legacy public helper only; current batch exports use a literal, optional text prefix.
     public static string ResolveLayerImageName(
         ExportMode mode,
         string imageName,
@@ -1005,6 +1046,7 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnFileNameChanged(string value)
     {
+        if (SelectedMode == ExportMode.Slices && ImageName != value) ImageName = value;
         RefreshCanExecute();
         QueueParameterMemory();
     }
@@ -1039,13 +1081,13 @@ public partial class MainViewModel : ViewModelBase
         SaveBehaviorSettings();
     }
 
-    partial void OnAutoRenameChanged(bool value) => SaveBehaviorSettings();
-
-    partial void OnLayerExportWithDocNameChanged(bool value) => SaveBehaviorSettings();
+    partial void OnAutoRenameChanged(bool value)
+    {
+        OnPropertyChanged(nameof(AutoRenameHint));
+        SaveBehaviorSettings();
+    }
 
     partial void OnLayerExportShowHintChanged(bool value) => SaveBehaviorSettings();
-
-    partial void OnAutoUseDocNameAsPrefixChanged(bool value) => SaveBehaviorSettings();
 
     partial void OnIsCancellingChanged(bool value)
     {
@@ -1075,20 +1117,11 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void SetTheme(AppThemeMode mode) => ThemeMode = mode;
 
-    [RelayCommand]
-    private void SetAutoRename(object? value) => AutoRename = ParseBooleanCommandParameter(value);
-
-    [RelayCommand]
-    private void SetLayerExportWithDocName(object? value) => LayerExportWithDocName = ParseBooleanCommandParameter(value);
+    [RelayCommand(CanExecute = nameof(CanChangeMode))]
+    private void ToggleAutoRename() => AutoRename = !AutoRename;
 
     [RelayCommand]
     private void SetLayerExportShowHint(object? value) => LayerExportShowHint = ParseBooleanCommandParameter(value);
-
-    [RelayCommand]
-    private void SetAutoUseDocNameAsPrefix(object? value) => AutoUseDocNameAsPrefix = ParseBooleanCommandParameter(value);
-
-    [RelayCommand]
-    private void SetAlwaysOnTop(object? value) => IsAlwaysOnTop = ParseBooleanCommandParameter(value);
 
     [RelayCommand]
     private void SetAutoRefreshOnActivated(object? value) => AutoRefreshOnActivated = ParseBooleanCommandParameter(value);

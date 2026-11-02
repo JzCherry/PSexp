@@ -90,7 +90,7 @@ public sealed class PhotoshopDocumentEvents : IDisposable
                 else Deactivate();
             }
             if (_registeredPid == 0) await RemoveCoreAsync();
-            else _logger.Info($"[document-events] subscribed pid={processId} registered={receipt.RootElement.GetProperty("registered")} rejected={receipt.RootElement.GetProperty("rejected")}；后台只接收变化标记，不读取文档。");
+            else _logger.Info($"[document-events] subscribed pid={processId} registered={receipt.RootElement.GetProperty("registered")} rejected={receipt.RootElement.GetProperty("rejected")}；仅发送变化通知，由窗口的置顶/焦点与可见状态决定何时读取。");
         }
         catch (Exception error)
         {
@@ -134,7 +134,7 @@ public sealed class PhotoshopDocumentEvents : IDisposable
     private void Notify()
     {
         lock (_state) { if (_disposed || !_enabled || _lease is null) return; }
-        _logger.Debug($"[document-events] changed version={Version}；仅通知界面检查前台资格。");
+        _logger.Debug($"[document-events] changed version={Version}；通知界面检查置顶/焦点与可见状态。");
         try { Changed?.Invoke(this, EventArgs.Empty); }
         catch (Exception error) { _logger.Debug("[document-events] 接收窗口已退出：" + error.Message); }
     }

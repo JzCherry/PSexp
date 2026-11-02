@@ -27,9 +27,11 @@ public sealed class AppSettings
     public string SliceFolderName { get; set; } = string.Empty;
     public string QuickImageName { get; set; } = string.Empty;
     public string LayerImagePrefix { get; set; } = string.Empty;
+    public string? LayerFilePrefix { get; set; }
+    public string ArtboardFilePrefix { get; set; } = string.Empty;
+    public LayerPrefixMode? LayerPrefixMode { get; set; }
     public ExportMode LastExportMode { get; set; } = ExportMode.QuickExport;
     public ExportPathOption LastArtboardPathOption { get; set; } = ExportPathOption.ImageOnly;
-    public int LastSettingsSection { get; set; }
     public bool ShowSettingsOnStartup { get; set; }
 
 
@@ -39,6 +41,7 @@ public sealed class AppSettings
     public bool LayerExportWithDocName { get; set; } = true;
     public bool LayerExportRecursive { get; set; }
     public bool LayerExportSelectedOnly { get; set; } = true;
+    public bool LayerTopLevelSelectedOnly { get; set; }
 
     /// <summary>兼容旧配置保留；当前版本不再使用 Photoshop 提示窗。</summary>
     public bool LayerExportShowHint { get; set; } = false;
@@ -61,8 +64,6 @@ public sealed class AppSettings
     public bool AutoCheckForUpdates { get; set; } = true;
     public bool AutoDownloadUpdates { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
-    public bool EnableBlankDrag { get; set; } = true;
-    public bool EnableQualityHoverAnimation { get; set; } = true;
     public int DockRetractDelayMs { get; set; } = 420;
 
     public WindowPlacementState? WindowPlacement { get; set; }

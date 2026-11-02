@@ -108,6 +108,7 @@
     <x:String x:Key="Icon.Refresh">&#xE72C;</x:String>
     <x:String x:Key="Icon.Pin">&#xE718;</x:String>
     <x:String x:Key="Icon.Settings">&#xE713;</x:String>
+    <x:String x:Key="Icon.Back">&#xE72B;</x:String>
     <x:String x:Key="Icon.Minimize">&#xE921;</x:String>
     <x:String x:Key="Icon.Close">&#xE8BB;</x:String>
     <x:String x:Key="Icon.Folder">&#xE8B7;</x:String>

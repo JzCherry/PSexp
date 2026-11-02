@@ -23,8 +23,22 @@
         WindowDecorations="None"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="-1"
-        Classes.quality-motion="{Binding EnableQualityHoverAnimation}"
+        Classes="quality-motion"
         Topmost="{Binding EffectiveTopmost}">
+
+    <Window.Resources>
+        <ControlTheme x:Key="LayerHelpFlyoutTheme" TargetType="FlyoutPresenter">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <controls:ContinuousBorder Margin="8" Padding="14"
+                        Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                        CornerRadius="{StaticResource Radius.Sm}" BoxShadow="{StaticResource Shadow.Menu}">
+                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                    </controls:ContinuousBorder>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </Window.Resources>
 
     <Grid x:Name="WindowSurface" ClipToBounds="True">
     <Grid x:Name="RootGrid">
@@ -90,29 +104,30 @@
                         </Button>
                         <Button Grid.Column="3"
                                 Margin="8,0,0,0" VerticalAlignment="Center"
-                                Classes="tool"
+                                Classes="tool pin-toggle" Classes.pinned="{Binding IsAlwaysOnTop}"
                                 chrome:WindowDecorationProperties.ElementRole="User"
                                 Command="{Binding ToggleAlwaysOnTopCommand}"
-                                ToolTip.Tip="窗口置顶">
-                            <controls:ContinuousBorder Background="{Binding IsAlwaysOnTop, Converter={x:Static vm:BoolToSettingBrushConverter.Instance}}"
-                                    CornerRadius="{StaticResource Radius.SegmentInner}"
-                                    Width="{StaticResource Control.ToolSize}"
-                                    Height="{StaticResource Control.ToolSize}" BorderBrush="{Binding IsAlwaysOnTop, Converter={x:Static vm:ChoiceBorderConverter.Instance}}" BorderThickness="1">
-                                <TextBlock Text="{StaticResource Icon.Pin}"
-                                           Classes="icon"
-                                           Foreground="{Binding IsAlwaysOnTop, Converter={x:Static vm:BoolToIconColorConverter.Instance}}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                            </controls:ContinuousBorder>
+                                AutomationProperties.Name="切换窗口置顶">
+                            <TextBlock Text="{StaticResource Icon.Pin}" Classes="icon"
+                                Foreground="{Binding $parent[Button].Foreground}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Button>
                         <Button Grid.Column="4"
                                 Margin="8,0,8,0" VerticalAlignment="Center"
                                 Classes="tool"
                                 chrome:WindowDecorationProperties.ElementRole="User"
-                                Command="{Binding ShowSettingsCommand}"
-                                IsEnabled="{Binding !IsBusy}"
-                                ToolTip.Tip="{Binding SettingsUpdateHint}">
-                            <Grid Width="20" Height="20"><TextBlock Text="{StaticResource Icon.Settings}" Classes="icon" HorizontalAlignment="Center" VerticalAlignment="Center"/><Ellipse Width="6" Height="6" Fill="{StaticResource Brush.StatusText}" HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding IsUpdateAvailable}" IsHitTestVisible="False"/></Grid>
+                                Command="{Binding ToggleSettingsViewCommand}"
+                                IsEnabled="{Binding CanOpenOrCloseSettings}"
+                                ToolTip.Tip="{Binding SettingsToggleHint}"
+                                AutomationProperties.Name="{Binding SettingsToggleHint}">
+                            <!-- 同一枚 28×28 按钮换皮：导出页齿轮（带更新红点），设置页返回箭头。 -->
+                            <Panel Width="20" Height="20">
+                                <Panel IsVisible="{Binding !IsViewSetting}">
+                                    <TextBlock Text="{StaticResource Icon.Settings}" Classes="icon" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Ellipse Width="6" Height="6" Fill="{StaticResource Brush.StatusText}" HorizontalAlignment="Right" VerticalAlignment="Top" IsVisible="{Binding IsUpdateAvailable}" IsHitTestVisible="False"/>
+                                </Panel>
+                                <TextBlock IsVisible="{Binding IsViewSetting}" Text="{StaticResource Icon.Back}" Classes="icon" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Panel>
                         </Button>
                         <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="0"
                                     HorizontalAlignment="Right" VerticalAlignment="Top">
@@ -322,7 +337,7 @@
                                     <Binding ElementName="ExportScrollViewer" Path="Viewport.Width"/>
                                 </MultiBinding>
                             </StackPanel.Margin>
-                            <views:ExportPresetBar Margin="0,6,0,6"/>
+                            <views:ExportPresetBar x:Name="ExportPresets" Margin="0,6,0,6"/>
                             <controls:ContinuousBorder Margin="0,6,0,12"
                                 Background="{StaticResource Brush.Surface}"
                                 BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
@@ -350,10 +365,11 @@
                                                         Classes="output-meta" Orientation="Horizontal" Height="{StaticResource Control.BadgeHeight}"
                                                         Spacing="6"
                                                         VerticalAlignment="Center">
-                                                <TextBlock Text="输出参数"
-                                                           Classes="micro meta-label"
-                                                           Foreground="{StaticResource Brush.TextMuted}"
-                                                           VerticalAlignment="Center"/>
+                                                <Button Classes="compact-action" Classes.active="{Binding AutoRename}"
+                                                    Command="{Binding ToggleAutoRenameCommand}" ToolTip.Tip="{Binding AutoRenameHint}"
+                                                    AutomationProperties.Name="同名自动改名" AutomationProperties.HelpText="{Binding AutoRenameHint}">
+                                                    <TextBlock Text="自动改名" VerticalAlignment="Center"/>
+                                                </Button>
                                                 <controls:ContinuousBorder Background="{StaticResource Brush.Surface}"
                                                         BorderBrush="{StaticResource Brush.Border}"
                                                         BorderThickness="1"
@@ -387,164 +403,8 @@
                                         </Grid>
                                     </controls:ContinuousBorder>
 
-                                        <StackPanel Grid.Row="1" Margin="0,6,0,8" Spacing="16">
-                                            <!-- Output destination is shared by every export mode. -->
-                                            <StackPanel Spacing="8" IsEnabled="{Binding CanChangeMode}">
-                                                <controls:SegmentOptionRow Spacing="12">
-                                                    <TextBlock Text="输出位置" Classes="label" VerticalAlignment="Center"/>
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding Destination}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetDestinationCommand}"
-                                                                CommandParameter="{x:Static models:ExportDestination.DocumentFolder}" ToolTip.Tip="导出到当前 Photoshop 文档所在的文件夹；文档需先保存。">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="文档位置" Classes="mode-label"
-                                                                    Foreground="{Binding Destination, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportDestination.DocumentFolder}}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetDestinationCommand}"
-                                                                CommandParameter="{x:Static models:ExportDestination.Desktop}" ToolTip.Tip="使用 Windows 的实际桌面目录，兼容桌面重定向。">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="桌面" Classes="mode-label"
-                                                                    Foreground="{Binding Destination, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportDestination.Desktop}}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetDestinationCommand}"
-                                                                CommandParameter="{x:Static models:ExportDestination.Custom}" ToolTip.Tip="输入或选择目录；切换预设会保留之前填写的路径。">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="自定义" Classes="mode-label"
-                                                                    Foreground="{Binding Destination, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportDestination.Custom}}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </controls:SegmentOptionRow>
-                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="88,0,0,0" IsVisible="{Binding IsCustomDestination}">
-                                                    <controls:ContinuousBorder Classes="input-shell" Height="{StaticResource Control.InputHeight}"
-                                                        CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
-                                                        <TextBox Background="Transparent" BorderThickness="0" Text="{Binding ExportPath}"
-                                                            PlaceholderText="输入或选择文件夹" AutomationProperties.Name="自定义输出路径"
-                                                            VerticalContentAlignment="Center" Padding="10,0"/>
-                                                    </controls:ContinuousBorder>
-                                                    <Button Grid.Column="1" Classes="folder" Command="{Binding BrowseExportFolderCommand}"
-                                                        ToolTip.Tip="选择输出文件夹" AutomationProperties.Name="选择输出文件夹">
-                                                        <TextBlock Text="{StaticResource Icon.Folder}" Classes="icon"/>
-                                                    </Button>
-                                                </Grid>
-                                                <Grid Margin="88,0,0,0" IsVisible="{Binding IsPresetDestination}">
-                                                    <TextBlock Text="{Binding ResolvedExportPath}" IsVisible="{Binding HasExportTarget}"
-                                                        Classes="settings-caption" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                                                        ToolTip.Tip="{Binding ResolvedExportPath}"/>
-                                                </Grid>
-                                                <TextBlock Margin="88,0,0,0" Text="{Binding DestinationHint}" IsVisible="{Binding !HasExportTarget}"
-                                                    Classes="setting-description" TextWrapping="Wrap"/>
-                                            </StackPanel>
-
-                                            <!-- 2. Format Selector -->
-                                            <controls:SegmentOptionRow Spacing="12" VerticalAlignment="Center">
-                                                <TextBlock Text="图片格式" Classes="label"/>
-                                                <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding Format}">
-                                                    <controls:SegmentPanel>
-                                                        <Button
-                                                                Classes="seg"
-                                                                Command="{Binding SetFormatCommand}"
-                                                                CommandParameter="{x:Static models:ExportFormat.Jpg}">
-                                                            <controls:ContinuousBorder Background="Transparent"
-                                                                    CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
-                                                                <TextBlock Text="JPG 格式"
-                                                                           Classes="mode-label"
-                                                                           Foreground="{Binding Format, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportFormat.Jpg}}"/>
-                                                            </controls:ContinuousBorder>
-                                                        </Button>
-                                                        <Button
-                                                                Classes="seg"
-                                                                Command="{Binding SetFormatCommand}"
-                                                                CommandParameter="{x:Static models:ExportFormat.Png}">
-                                                            <controls:ContinuousBorder Background="Transparent"
-                                                                    CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
-                                                                <TextBlock Text="PNG 无损"
-                                                                           Classes="mode-label"
-                                                                           Foreground="{Binding Format, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportFormat.Png}}"/>
-                                                            </controls:ContinuousBorder>
-                                                        </Button>
-                                                    </controls:SegmentPanel>
-                                                </controls:AnimatedSegmentTrack>
-                                            </controls:SegmentOptionRow>
-
-                                            <StackPanel IsVisible="{Binding IsLayerMode}" Spacing="8">
-                                                <controls:SegmentOptionRow Spacing="12">
-                                                    <TextBlock Text="导出模式" Classes="label"/>
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding LayerExportRecursive}" IsEnabled="{Binding !IsExporting}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="False"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="一级图层" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="True"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="图层" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </controls:SegmentOptionRow>
-                                                <controls:SegmentOptionRow Spacing="12" IsVisible="{Binding ShowLayerSelection}">
-                                                    <TextBlock Text="导出对象" Classes="label"/>
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding LayerExportSelectedOnly}" IsEnabled="{Binding !IsExporting}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="True"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="选中图层" Classes="mode-label" Foreground="{Binding LayerExportSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="False"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="全部图层" Classes="mode-label" Foreground="{Binding LayerExportSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </controls:SegmentOptionRow>
-                                                <StackPanel Margin="88,0,0,0" Spacing="3">
-                                                    <TextBlock Text="{Binding LayerModeHint}" Classes="setting-description" TextWrapping="Wrap"/>
-                                                    <TextBlock Text="“排除”前缀：不单独导出。" Classes="setting-description" TextWrapping="Wrap" ToolTip.Tip="排除组的子图层也跳过；背景和排除项保留原显示状态，作为合成内容。其他符合条件的隐藏图层仍可导出。"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                            <!-- 3. Quality: one field, one surface -->
-                                            <Grid x:Name="QualityControl" Cursor="Arrow" ColumnDefinitions="76,*" ColumnSpacing="12" VerticalAlignment="Center" IsVisible="{Binding IsJpgFormat}">
-                                                <TextBlock Text="图片质量" Classes="label"/>
-                                                <Grid Grid.Column="1" ColumnDefinitions="*,64" ColumnSpacing="12">
-                                                    <Grid x:Name="QualityMeter"
-                                                              Cursor="Arrow"
-                                                              Grid.Column="0"
-                                                              ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*"
-                                                              ColumnSpacing="1.5"
-                                                              Height="{StaticResource Control.StandardHeight}"
-                                                              VerticalAlignment="Center"
-                                                              Background="Transparent"
-                                                              ClipToBounds="False">
-<Button Grid.Column="0" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="4" ToolTip.Tip="4%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=4}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="1" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="8" ToolTip.Tip="8%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=8}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="2" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="12" ToolTip.Tip="12%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=12}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="3" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="16" ToolTip.Tip="16%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=16}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="4" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="20" ToolTip.Tip="20%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=20}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="5" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="24" ToolTip.Tip="24%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=24}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="6" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="28" ToolTip.Tip="28%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=28}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="7" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="32" ToolTip.Tip="32%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=32}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="8" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="36" ToolTip.Tip="36%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=36}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="9" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="40" ToolTip.Tip="40%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=40}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="10" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="44" ToolTip.Tip="44%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=44}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="11" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="48" ToolTip.Tip="48%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=48}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="12" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="52" ToolTip.Tip="52%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=52}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="13" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="56" ToolTip.Tip="56%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=56}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="14" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="60" ToolTip.Tip="60%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=60}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="15" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="64" ToolTip.Tip="64%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=64}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="16" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="68" ToolTip.Tip="68%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=68}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="17" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="72" ToolTip.Tip="72%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=72}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="18" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="76" ToolTip.Tip="76%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=76}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="19" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="80" ToolTip.Tip="80%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=80}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="20" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="84" ToolTip.Tip="84%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=84}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="21" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="88" ToolTip.Tip="88%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=88}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="22" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="92" ToolTip.Tip="92%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=92}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="23" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="96" ToolTip.Tip="96%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=96}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="24" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="100" ToolTip.Tip="100%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=100}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-                                                        </Grid>
-                                                    <controls:ContinuousBorder Grid.Column="1" Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}"
-                                                        Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
-                                                        <Grid ColumnDefinitions="*,Auto">
-                                                            <TextBox x:Name="QualityInput" Text="{Binding Quality}" Height="{StaticResource Control.InputInnerHeight}" MinWidth="0" Padding="6,0,0,0"
-                                                                Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
-                                                            <TextBlock Grid.Column="1" Text="%" Margin="0,0,8,0" Classes="hint" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                    </controls:ContinuousBorder>
-                                                </Grid>
-                                            </Grid>
-
-                                            <!-- 4. Artboard export range -->
+                                        <StackPanel Grid.Row="1" Margin="0,6,0,8" Spacing="20">
+                                            <!-- Export target comes first; hidden rows reserve no space. -->
                                             <controls:SegmentOptionRow
                                                   Spacing="12"
                                                   VerticalAlignment="Center"
@@ -579,101 +439,275 @@
                                                 </controls:AnimatedSegmentTrack>
                                             </controls:SegmentOptionRow>
 
-                                            <!-- 5. Artboard save location -->
-                                            <controls:SegmentOptionRow
-                                                  Spacing="12"
-                                                  VerticalAlignment="Center"
-                                                  IsVisible="{Binding IsArtboardMode}">
-                                                <TextBlock Text="存放方式" Classes="label" ToolTip.Tip="在上方输出目录内，选择直接保存画板图片或按文档名建文件夹。"/>
-                                                <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding ExportPathOption}">
-                                                    <controls:SegmentPanel>
-                                                        <Button
-                                                                Classes="seg"
-                                                                Command="{Binding SetExportPathOptionCommand}"
-                                                                CommandParameter="{x:Static models:ExportPathOption.ImageOnly}"
-                                                                ToolTip.Tip="直接将画板图片保存到当前选择的输出目录">
-                                                            <controls:ContinuousBorder Background="Transparent"
-                                                                    CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
-                                                                <TextBlock Text="图片直出"
-                                                                           Classes="mode-label"
-                                                                           FontSize="11"
-                                                                           Foreground="{Binding ExportPathOption, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportPathOption.ImageOnly}}"/>
-                                                            </controls:ContinuousBorder>
+                                            <StackPanel IsVisible="{Binding IsLayerMode}" Spacing="8">
+                                                <controls:SegmentOptionRow Spacing="12">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                        <TextBlock Text="导出模式" Classes="label" VerticalAlignment="Center"/>
+                                                        <Button Classes="tool" Width="24" Height="24" MinWidth="24" MinHeight="24" Padding="0"
+                                                            ToolTip.Tip="{Binding LayerModeHelpText}" AutomationProperties.Name="图层导出说明"
+                                                            AutomationProperties.HelpText="悬停或点击查看一级图层、选择范围与排除规则">
+                                                            <Viewbox Width="14" Height="14">
+                                                                <Canvas Width="16" Height="16">
+                                                                    <Path Data="M8,1 A7,7 0 1 1 8,15 A7,7 0 1 1 8,1 M6,6 A2,2 0 1 1 9,7.7 L8,8.5 L8,10"
+                                                                        Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.25"/>
+                                                                    <Ellipse Width="1.4" Height="1.4" Canvas.Left="7.3" Canvas.Top="11.3" Fill="{Binding $parent[Button].Foreground}"/>
+                                                                </Canvas>
+                                                            </Viewbox>
+                                                            <Button.Flyout>
+                                                                <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedLeft"
+                                                                    FlyoutPresenterTheme="{StaticResource LayerHelpFlyoutTheme}">
+                                                                    <StackPanel Spacing="8" MaxWidth="276">
+                                                                        <TextBlock Text="图层导出说明" FontWeight="SemiBold"/>
+                                                                        <TextBlock Text="{Binding LayerModeHelpText}" FontSize="12" TextWrapping="Wrap"/>
+                                                                    </StackPanel>
+                                                                </Flyout>
+                                                            </Button.Flyout>
                                                         </Button>
+                                                    </StackPanel>
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding LayerExportRecursive}" IsEnabled="{Binding !IsExporting}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="False"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="一级图层" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportRecursiveCommand}" CommandParameter="True"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="图层" Classes="mode-label" Foreground="{Binding LayerExportRecursive, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </controls:SegmentOptionRow>
+                                                <controls:SegmentOptionRow Spacing="12" IsVisible="{Binding ShowLayerSelection}">
+                                                    <TextBlock Text="导出对象" Classes="label"/>
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding IsLayerSelectionSelectedOnly}" IsEnabled="{Binding !IsExporting}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="True"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="选中图层" Classes="mode-label" Foreground="{Binding IsLayerSelectionSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/></controls:ContinuousBorder></Button>
+                                                            <Button Classes="seg" Command="{Binding SetLayerExportSelectedOnlyCommand}" CommandParameter="False"><controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}"><TextBlock Text="全部图层" Classes="mode-label" Foreground="{Binding IsLayerSelectionSelectedOnly, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/></controls:ContinuousBorder></Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </controls:SegmentOptionRow>
+                                            </StackPanel>
 
-                                                        <Button
-                                                                Classes="seg"
-                                                                Command="{Binding SetExportPathOptionCommand}"
-                                                                CommandParameter="{x:Static models:ExportPathOption.NewFolder}"
-                                                                ToolTip.Tip="按当前 Photoshop 文档名新建文件夹；重名时自动追加序号，保留旧结果">
-                                                            <controls:ContinuousBorder Background="Transparent"
-                                                                    CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
-                                                                <TextBlock Text="文档文件夹"
-                                                                           Classes="mode-label"
-                                                                           FontSize="11"
-                                                                           Foreground="{Binding ExportPathOption, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportPathOption.NewFolder}}"/>
-                                                            </controls:ContinuousBorder>
+                                            <!-- Image specification: format and its dependent quality control. -->
+                                            <StackPanel Spacing="12">
+                                                <!-- Image format; JPG quality stays immediately below. -->
+                                                <controls:SegmentOptionRow Spacing="12" VerticalAlignment="Center">
+                                                    <TextBlock Text="图片格式" Classes="label"/>
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding Format}">
+                                                        <controls:SegmentPanel>
+                                                            <Button
+                                                                    Classes="seg"
+                                                                    Command="{Binding SetFormatCommand}"
+                                                                    CommandParameter="{x:Static models:ExportFormat.Jpg}">
+                                                                <controls:ContinuousBorder Background="Transparent"
+                                                                        CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
+                                                                    <TextBlock Text="JPG 格式"
+                                                                               Classes="mode-label"
+                                                                               Foreground="{Binding Format, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportFormat.Jpg}}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                            <Button
+                                                                    Classes="seg"
+                                                                    Command="{Binding SetFormatCommand}"
+                                                                    CommandParameter="{x:Static models:ExportFormat.Png}">
+                                                                <controls:ContinuousBorder Background="Transparent"
+                                                                        CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
+                                                                    <TextBlock Text="PNG 无损"
+                                                                               Classes="mode-label"
+                                                                               Foreground="{Binding Format, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportFormat.Png}}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </controls:SegmentOptionRow>
+
+                                                <!-- JPG-only quality: one field, one surface. -->
+                                                <Grid x:Name="QualityControl" Cursor="Arrow" ColumnDefinitions="76,*" ColumnSpacing="12" VerticalAlignment="Center" IsVisible="{Binding IsJpgFormat}">
+                                                    <TextBlock Text="图片质量" Classes="label"/>
+                                                    <Grid Grid.Column="1" ColumnDefinitions="*,64" ColumnSpacing="12">
+                                                        <Grid x:Name="QualityMeter"
+                                                                  Cursor="Arrow"
+                                                                  Grid.Column="0"
+                                                                  ColumnDefinitions="*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*,*"
+                                                                  ColumnSpacing="1.5"
+                                                                  Height="{StaticResource Control.StandardHeight}"
+                                                                  VerticalAlignment="Center"
+                                                                  Background="Transparent"
+                                                                  ClipToBounds="False">
+<Button Grid.Column="0" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="4" ToolTip.Tip="4%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=4}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="1" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="8" ToolTip.Tip="8%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=8}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="2" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="12" ToolTip.Tip="12%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=12}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="3" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="16" ToolTip.Tip="16%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=16}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="4" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="20" ToolTip.Tip="20%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=20}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="5" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="24" ToolTip.Tip="24%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=24}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="6" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="28" ToolTip.Tip="28%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=28}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="7" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="32" ToolTip.Tip="32%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=32}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="8" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="36" ToolTip.Tip="36%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=36}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="9" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="40" ToolTip.Tip="40%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=40}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="10" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="44" ToolTip.Tip="44%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=44}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="11" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="48" ToolTip.Tip="48%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=48}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="12" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="52" ToolTip.Tip="52%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=52}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="13" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="56" ToolTip.Tip="56%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=56}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="14" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="60" ToolTip.Tip="60%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=60}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="15" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="64" ToolTip.Tip="64%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=64}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="16" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="68" ToolTip.Tip="68%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=68}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="17" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="72" ToolTip.Tip="72%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=72}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="18" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="76" ToolTip.Tip="76%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=76}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="19" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="80" ToolTip.Tip="80%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=80}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="20" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="84" ToolTip.Tip="84%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=84}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="21" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="88" ToolTip.Tip="88%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=88}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="22" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="92" ToolTip.Tip="92%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=92}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="23" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="96" ToolTip.Tip="96%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=96}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="24" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="100" ToolTip.Tip="100%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=100}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+                                                            </Grid>
+                                                        <controls:ContinuousBorder Grid.Column="1" Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}"
+                                                            Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                                                            <Grid ColumnDefinitions="*,Auto">
+                                                                <TextBox x:Name="QualityInput" Text="{Binding Quality}" Height="{StaticResource Control.InputInnerHeight}" MinWidth="0" Padding="6,0,0,0"
+                                                                    Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+                                                                <TextBlock Grid.Column="1" Text="%" Margin="0,0,8,0" Classes="hint" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                        </controls:ContinuousBorder>
+                                                    </Grid>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Saving: destination, optional folder, then file name or prefix. -->
+                                            <StackPanel Spacing="12">
+                                                <!-- Output destination is shared by every export mode. -->
+                                                <StackPanel Spacing="8" IsEnabled="{Binding CanChangeMode}">
+                                                    <controls:SegmentOptionRow Spacing="12">
+                                                        <TextBlock Text="输出位置" Classes="label" VerticalAlignment="Center"/>
+                                                        <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding Destination}">
+                                                            <controls:SegmentPanel>
+                                                                <Button Classes="seg" Command="{Binding SetDestinationCommand}"
+                                                                    CommandParameter="{x:Static models:ExportDestination.DocumentFolder}" ToolTip.Tip="导出到当前 Photoshop 文档所在的文件夹；文档需先保存。">
+                                                                    <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                        <TextBlock Text="文档位置" Classes="mode-label"
+                                                                        Foreground="{Binding Destination, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportDestination.DocumentFolder}}"/>
+                                                                    </controls:ContinuousBorder>
+                                                                </Button>
+                                                                <Button Classes="seg" Command="{Binding SetDestinationCommand}"
+                                                                    CommandParameter="{x:Static models:ExportDestination.Desktop}" ToolTip.Tip="使用 Windows 的实际桌面目录，兼容桌面重定向。">
+                                                                    <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                        <TextBlock Text="桌面" Classes="mode-label"
+                                                                        Foreground="{Binding Destination, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportDestination.Desktop}}"/>
+                                                                    </controls:ContinuousBorder>
+                                                                </Button>
+                                                                <Button Classes="seg" Command="{Binding SetDestinationCommand}"
+                                                                    CommandParameter="{x:Static models:ExportDestination.Custom}" ToolTip.Tip="输入或选择目录；切换预设会保留之前填写的路径。">
+                                                                    <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                        <TextBlock Text="自定义" Classes="mode-label"
+                                                                        Foreground="{Binding Destination, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportDestination.Custom}}"/>
+                                                                    </controls:ContinuousBorder>
+                                                                </Button>
+                                                            </controls:SegmentPanel>
+                                                        </controls:AnimatedSegmentTrack>
+                                                    </controls:SegmentOptionRow>
+                                                    <!-- Both path layouts span the card content, independent of the label/segment row. -->
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" HorizontalAlignment="Stretch" IsVisible="{Binding IsCustomDestination}">
+                                                        <controls:ContinuousBorder Classes="input-shell" Height="{StaticResource Control.InputHeight}"
+                                                            CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                                                            <TextBox Background="Transparent" BorderThickness="0" Text="{Binding ExportPath, Mode=TwoWay}"
+                                                                ToolTip.Tip="{Binding ExportPath}"
+                                                                PlaceholderText="输入或选择文件夹" AutomationProperties.Name="自定义输出路径"
+                                                                VerticalContentAlignment="Center" Padding="10,0"/>
+                                                        </controls:ContinuousBorder>
+                                                        <Button Grid.Column="1" Classes="folder" Command="{Binding BrowseExportFolderCommand}"
+                                                            ToolTip.Tip="选择输出文件夹" AutomationProperties.Name="选择输出文件夹">
+                                                            <TextBlock Text="{StaticResource Icon.Folder}" Classes="icon"/>
                                                         </Button>
+                                                    </Grid>
+                                                    <controls:ContinuousBorder Classes="input-shell" Height="{StaticResource Control.InputHeight}"
+                                                        HorizontalAlignment="Stretch" IsVisible="{Binding IsPresetDestination}"
+                                                        CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                                                        <TextBox Background="Transparent" BorderThickness="0" Text="{Binding ResolvedExportPath, Mode=OneWay}"
+                                                            IsReadOnly="True" PlaceholderText="等待获取输出位置" AutomationProperties.Name="输出路径（只读）"
+                                                            ToolTip.Tip="{Binding ResolvedExportPath}"
+                                                            VerticalContentAlignment="Center" Padding="10,0"/>
+                                                    </controls:ContinuousBorder>
+                                                    <TextBlock Text="{Binding DestinationHint}" IsVisible="{Binding !HasExportTarget}"
+                                                        Classes="setting-description" TextWrapping="Wrap"/>
+                                                </StackPanel>
 
-                                                        <Button
-                                                                Classes="seg"
-                                                                Command="{Binding SetExportPathOptionCommand}"
-                                                                CommandParameter="{x:Static models:ExportPathOption.NewFolderOverwrite}"
-                                                                ToolTip.Tip="使用当前 Photoshop 文档名文件夹；已存在时复用，并更新本次同名导出文件">
-                                                            <controls:ContinuousBorder Background="Transparent"
-                                                                    CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
-                                                                <TextBlock Text="覆盖文件夹"
-                                                                           Classes="mode-label"
-                                                                           FontSize="11"
-                                                                           Foreground="{Binding ExportPathOption, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportPathOption.NewFolderOverwrite}}"/>
-                                                            </controls:ContinuousBorder>
-                                                        </Button>
-                                                    </controls:SegmentPanel>
-                                                </controls:AnimatedSegmentTrack>
-                                            </controls:SegmentOptionRow>
+                                                <!-- Artboard folder strategy belongs with the output destination. -->
+                                                <controls:SegmentOptionRow
+                                                      Spacing="12"
+                                                      VerticalAlignment="Center"
+                                                      IsVisible="{Binding IsArtboardMode}">
+                                                    <TextBlock Text="存放方式" Classes="label" ToolTip.Tip="在上方输出目录内，选择直接保存画板图片或按文档名建文件夹。"/>
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding ExportPathOption}">
+                                                        <controls:SegmentPanel>
+                                                            <Button
+                                                                    Classes="seg"
+                                                                    Command="{Binding SetExportPathOptionCommand}"
+                                                                    CommandParameter="{x:Static models:ExportPathOption.ImageOnly}"
+                                                                    ToolTip.Tip="直接将画板图片保存到当前选择的输出目录">
+                                                                <controls:ContinuousBorder Background="Transparent"
+                                                                        CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
+                                                                    <TextBlock Text="图片直出"
+                                                                               Classes="mode-label"
+                                                                               FontSize="11"
+                                                                               Foreground="{Binding ExportPathOption, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportPathOption.ImageOnly}}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
 
-                                            <!-- 6. Mode-specific name -->
-                                            <Grid ColumnDefinitions="76,*"
-                                                  ColumnSpacing="12"
-                                                  VerticalAlignment="Center"
-                                                  IsVisible="{Binding IsImageNameVisible}">
-                                                <TextBlock Grid.Column="0" Text="{Binding ImageNameLabel}" Classes="label"/>
-                                                <controls:ContinuousBorder Grid.Column="1"  Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"><TextBox Background="Transparent" BorderThickness="0" 
-                                                         Text="{Binding ImageName}"
-                                                         PlaceholderText="{Binding ImageNamePlaceholder}"
-                                                         VerticalContentAlignment="Center"
-                                                         Padding="10,0"/></controls:ContinuousBorder>
-                                            </Grid>
+                                                            <Button
+                                                                    Classes="seg"
+                                                                    Command="{Binding SetExportPathOptionCommand}"
+                                                                    CommandParameter="{x:Static models:ExportPathOption.NewFolder}"
+                                                                    ToolTip.Tip="按当前 Photoshop 文档名新建文件夹；重名时自动追加序号，保留旧结果">
+                                                                <controls:ContinuousBorder Background="Transparent"
+                                                                        CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
+                                                                    <TextBlock Text="文档文件夹"
+                                                                               Classes="mode-label"
+                                                                               FontSize="11"
+                                                                               Foreground="{Binding ExportPathOption, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportPathOption.NewFolder}}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
 
-                                            <!-- Optional slice subfolder; shares the existing parameter grid and input style. -->
-                                            <Grid ColumnDefinitions="76,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" VerticalAlignment="Center"
-                                                  IsVisible="{Binding IsFileNameVisible}">
-                                                <TextBlock Text="切片文件夹" Classes="label"
-                                                           ToolTip.Tip="填写后在输出位置内创建或复用同名子文件夹；留空直接导出。"/>
-                                                <controls:ContinuousBorder Grid.Column="1" Classes="input-shell"
-                                                    Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}"
-                                                    Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
-                                                    <TextBox Background="Transparent" BorderThickness="0" Text="{Binding SliceFolderName}"
-                                                        PlaceholderText="留空不建文件夹" AutomationProperties.Name="切片文件夹名称（可选）"
-                                                        VerticalContentAlignment="Center" Padding="10,0"/>
-                                                </controls:ContinuousBorder>
-                                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" Text="{Binding SliceFolderNameError}"
-                                                    IsVisible="{Binding HasSliceFolderNameError}" TextWrapping="Wrap" FontSize="12"
-                                                    Foreground="{StaticResource Brush.Error}"/>
-                                            </Grid>
+                                                            <Button
+                                                                    Classes="seg"
+                                                                    Command="{Binding SetExportPathOptionCommand}"
+                                                                    CommandParameter="{x:Static models:ExportPathOption.NewFolderOverwrite}"
+                                                                    ToolTip.Tip="使用当前 Photoshop 文档名文件夹；已存在时复用，并更新本次同名导出文件">
+                                                                <controls:ContinuousBorder Background="Transparent"
+                                                                        CornerRadius="{StaticResource Radius.SegmentInner}" BorderBrush="Transparent" BorderThickness="0">
+                                                                    <TextBlock Text="覆盖文件夹"
+                                                                               Classes="mode-label"
+                                                                               FontSize="11"
+                                                                               Foreground="{Binding ExportPathOption, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter={x:Static models:ExportPathOption.NewFolderOverwrite}}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </controls:SegmentOptionRow>
 
-                                            <!-- 7. Slice Prefix -->
-                                            <Grid ColumnDefinitions="76,*"
-                                                  ColumnSpacing="12"
-                                                  VerticalAlignment="Center"
-                                                  IsVisible="{Binding IsFileNameVisible}">
-                                                <TextBlock Grid.Column="0" Text="文件前缀" Classes="label"/>
-                                                <controls:ContinuousBorder Grid.Column="1"  Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"><TextBox Background="Transparent" BorderThickness="0" 
-                                                         Text="{Binding FileName}"
-                                                         PlaceholderText="可留空，使用切片名称或序号"
-                                                         VerticalContentAlignment="Center"
-                                                         Padding="10,0"/></controls:ContinuousBorder>
-                                            </Grid>
+                                                <!-- Optional slice subfolder; shares the existing parameter grid and input style. -->
+                                                <Grid ColumnDefinitions="76,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" VerticalAlignment="Center"
+                                                      IsVisible="{Binding IsFileNameVisible}">
+                                                    <TextBlock Text="切片文件夹" Classes="label"
+                                                               ToolTip.Tip="填写后在输出位置内创建或复用同名子文件夹；留空直接导出。"/>
+                                                    <controls:ContinuousBorder Grid.Column="1" Classes="input-shell"
+                                                        Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}"
+                                                        Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                                                        <TextBox Background="Transparent" BorderThickness="0" Text="{Binding SliceFolderName}"
+                                                            PlaceholderText="留空不建文件夹" AutomationProperties.Name="切片文件夹名称（可选）"
+                                                            VerticalContentAlignment="Center" Padding="10,0"/>
+                                                    </controls:ContinuousBorder>
+                                                    <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" Text="{Binding SliceFolderNameError}"
+                                                        IsVisible="{Binding HasSliceFolderNameError}" TextWrapping="Wrap" FontSize="12"
+                                                        Foreground="{StaticResource Brush.Error}"/>
+                                                </Grid>
+
+                                                <!-- Shared full name for quick export; literal optional prefix for all batch modes. -->
+                                                <Grid ColumnDefinitions="76,*"
+                                                      ColumnSpacing="12"
+                                                      VerticalAlignment="Center"
+                                                      IsVisible="{Binding IsImageNameVisible}">
+                                                    <TextBlock Grid.Column="0" Text="{Binding ImageNameLabel}" Classes="label"/>
+                                                    <controls:ContinuousBorder Grid.Column="1"  Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"><TextBox Background="Transparent" BorderThickness="0"
+                                                             Text="{Binding ImageName}" ToolTip.Tip="{Binding ImageNameHint}" AutomationProperties.Name="{Binding ImageNameLabel}"
+                                                             PlaceholderText="{Binding ImageNamePlaceholder}"
+                                                             VerticalContentAlignment="Center"
+                                                             Padding="10,0"/></controls:ContinuousBorder>
+                                                </Grid>
+                                            </StackPanel>
+
                                         </StackPanel>
 
 
@@ -693,46 +727,44 @@
                             </controls:ContinuousBorder>
                         </StackPanel>
                     </ScrollViewer>
-                    <!-- Settings sit directly on the window canvas; each group owns its card. -->
+                    <!-- 五组分节清单：组标签在卡外，卡片只承载行；图标全部去掉，层级靠字号与字色。 -->
                     <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12"
-                          Margin="16,6,16,12" IsVisible="{Binding IsViewSetting}">
-                        <Grid ColumnDefinitions="*,Auto" Width="{Binding #SettingsPageHost.Bounds.Width}" HorizontalAlignment="Left">
-                            <TextBlock Text="设置" Classes="title" VerticalAlignment="Center"/>
-                            <Button Grid.Column="1" Classes="secondary" Command="{Binding HideSettingsCommand}" Content="返回导出"/>
-                        </Grid>
-                        <Panel Grid.Row="1" Width="{Binding #SettingsPageHost.Bounds.Width}" HorizontalAlignment="Left">
-                            <controls:AnimatedSegmentTrack Classes="choice-track settings-tabs" SelectionValue="{Binding SelectedSettingsSection}">
-                                <controls:SegmentPanel>
-                                    <Button Classes="seg" Command="{Binding SelectSettingsSectionCommand}" CommandParameter="0">
-                                        <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                            <TextBlock Text="常规" Classes="mode-label" Foreground="{Binding SelectedSettingsSection, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=0}"/>
-                                        </controls:ContinuousBorder>
-                                    </Button>
-                                    <Button Classes="seg" Command="{Binding SelectSettingsSectionCommand}" CommandParameter="1">
-                                        <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                            <TextBlock Text="导出" Classes="mode-label" Foreground="{Binding SelectedSettingsSection, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=1}"/>
-                                        </controls:ContinuousBorder>
-                                    </Button>
-                                    <Button Classes="seg" Command="{Binding SelectSettingsSectionCommand}" CommandParameter="2">
-                                        <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                            <TextBlock Text="联动" Classes="mode-label" Foreground="{Binding SelectedSettingsSection, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=2}"/>
-                                        </controls:ContinuousBorder>
-                                    </Button>
-                                    <Button Classes="seg" Command="{Binding SelectSettingsSectionCommand}" CommandParameter="3">
-                                        <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                            <TextBlock Text="更新" Classes="mode-label" Foreground="{Binding SelectedSettingsSection, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=3}"/>
-                                        </controls:ContinuousBorder>
-                                    </Button>
-                                </controls:SegmentPanel>
-                            </controls:AnimatedSegmentTrack>
-                        </Panel>
+                          Margin="0,6,0,12" IsVisible="{Binding IsViewSetting}">
+                        <TextBlock Grid.Row="0" Text="设置" Classes="title"
+                            Margin="16,0"/>
+                        <controls:ContinuousBorder Grid.Row="1" Classes="input-shell settings-search"
+                            Margin="16,0" Height="36" Padding="10,0"
+                            Background="{DynamicResource Brush.SettingsCard}"
+                            BorderThickness="1" CornerRadius="{StaticResource Radius.Sm}">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                                <Path Data="M6.5 1A5.5 5.5 0 1 0 6.5 12A5.5 5.5 0 1 0 6.5 1 M10.5 10.5L15 15"
+                                    Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource Brush.TextMuted}" StrokeThickness="1.4" VerticalAlignment="Center"/>
+                                <TextBox x:Name="SettingsSearchInput" Classes="settings-search-input" Grid.Column="1" Text="{Binding SettingsSearchQuery, Mode=TwoWay}"
+                                    PlaceholderText="搜索设置…" AutomationProperties.Name="搜索设置" ToolTip.Tip="搜索名称或用途，例如主题、托盘、更新"
+                                    Background="Transparent" BorderThickness="0" Padding="0" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="{Binding SettingsSearchSummary}" IsVisible="{Binding IsSearchingSettings}"
+                                    FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="3" Classes="tool" Width="24" Height="24" MinHeight="24" MaxHeight="24" Padding="0" VerticalAlignment="Center"
+                                    IsVisible="{Binding HasSettingsSearchText}" Command="{Binding ClearSettingsSearchCommand}" Click="OnClearSettingsSearchClick"
+                                    ToolTip.Tip="清空搜索" AutomationProperties.Name="清空设置搜索">
+                                    <Path Data="M1 1L11 11 M11 1L1 11" Width="10" Height="10" Stretch="Uniform"
+                                        Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.4"/>
+                                </Button>
+                            </Grid>
+                        </controls:ContinuousBorder>
                         <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="2" Classes="subtle-scroll" AllowAutoHide="False" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <Grid x:Name="SettingsPageHost" Margin="0,4,8,8">
-                                <StackPanel Classes="settings-page" IsVisible="{Binding IsSettingsGeneral}">
+                            <StackPanel x:Name="SettingsPageHost" Classes="settings-page">
+                                <StackPanel.Margin>
+                                    <MultiBinding Converter="{x:Static vm:ScrollContentInsetConverter.Instance}" ConverterParameter="{StaticResource Space.Lg}">
+                                        <Binding ElementName="SettingsScrollViewer" Path="Bounds.Width"/>
+                                        <Binding ElementName="SettingsScrollViewer" Path="Viewport.Width"/>
+                                    </MultiBinding>
+                                </StackPanel.Margin>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowUiWindowCard}">
+                                    <TextBlock Classes="settings-group-label" Text="外观与窗口"/>
                                     <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <TextBlock Text="界面" Classes="settings-group-title"/>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                        <StackPanel>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowThemeSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <TextBlock Text="主题" Classes="setting-label" VerticalAlignment="Center"/>
                                                 <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center" SelectionValue="{Binding ThemeMode}">
                                                     <controls:SegmentPanel>
@@ -754,60 +786,18 @@
                                                     </controls:SegmentPanel>
                                                 </controls:AnimatedSegmentTrack>
                                             </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="空白处拖窗" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="按钮、输入框、滚动条和质量条保持各自操作。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding EnableBlankDrag}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetEnableBlankDragCommand}" CommandParameter="False" AutomationProperties.Name="空白处拖窗：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding EnableBlankDrag, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetEnableBlankDragCommand}" CommandParameter="True" AutomationProperties.Name="空白处拖窗：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding EnableBlankDrag, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
-                                            </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="质量条悬停动效" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="控制悬停放大；点击和数值变化的反馈保留。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding EnableQualityHoverAnimation}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetEnableQualityHoverAnimationCommand}" CommandParameter="False" AutomationProperties.Name="质量条悬停动效：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding EnableQualityHoverAnimation, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetEnableQualityHoverAnimationCommand}" CommandParameter="True" AutomationProperties.Name="质量条悬停动效：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding EnableQualityHoverAnimation, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
-                                            </Grid>
-                                        </StackPanel>
-                                    </controls:ContinuousBorder>
-                                    <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <TextBlock Text="窗口" Classes="settings-group-title"/>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="关闭后常驻" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="关闭按钮收起到托盘；在托盘右键菜单中选择退出。"/>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowThemeTrayLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowTraySetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="关闭后常驻后台" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="关闭按钮收起到托盘；在托盘右键菜单中选择退出。"/>
                                                 <Panel Grid.Column="1">
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding CloseToTray}">
                                                         <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetCloseToTrayCommand}" CommandParameter="False" AutomationProperties.Name="关闭后常驻：关闭">
+                                                            <Button Classes="seg" Command="{Binding SetCloseToTrayCommand}" CommandParameter="False" AutomationProperties.Name="关闭后常驻后台：关闭">
                                                                 <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
                                                                     <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding CloseToTray, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
                                                                 </controls:ContinuousBorder>
                                                             </Button>
-                                                            <Button Classes="seg" Command="{Binding SetCloseToTrayCommand}" CommandParameter="True" AutomationProperties.Name="关闭后常驻：开启">
+                                                            <Button Classes="seg" Command="{Binding SetCloseToTrayCommand}" CommandParameter="True" AutomationProperties.Name="关闭后常驻后台：开启">
                                                                 <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
                                                                     <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding CloseToTray, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
                                                                 </controls:ContinuousBorder>
@@ -816,26 +806,8 @@
                                                     </controls:AnimatedSegmentTrack>
                                                 </Panel>
                                             </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="窗口置顶" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="主窗口保持置顶；收纳入口独立保持可见。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding IsAlwaysOnTop}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetAlwaysOnTopCommand}" CommandParameter="False" AutomationProperties.Name="窗口置顶：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding IsAlwaysOnTop, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetAlwaysOnTopCommand}" CommandParameter="True" AutomationProperties.Name="窗口置顶：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding IsAlwaysOnTop, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
-                                            </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowTrayEdgeLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowEdgeSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <TextBlock Text="贴边收纳" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="拖到屏幕边缘后收纳，悬停或点击入口展开。"/>
                                                 <Panel Grid.Column="1">
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding EnableEdgeSnap}">
@@ -854,7 +826,8 @@
                                                     </controls:AnimatedSegmentTrack>
                                                 </Panel>
                                             </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowEdgeDelayLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowDelaySetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <TextBlock Text="收回等待" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="鼠标移出后等待 250 / 420 / 800 毫秒再收回。"/>
                                                 <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center" SelectionValue="{Binding DockRetractDelayMs}" IsEnabled="{Binding EnableEdgeSnap}">
                                                     <controls:SegmentPanel>
@@ -879,94 +852,27 @@
                                         </StackPanel>
                                     </controls:ContinuousBorder>
                                 </StackPanel>
-                                <StackPanel Classes="settings-page" IsVisible="{Binding IsSettingsExport}">
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowMemoryNote}">
+                                    <TextBlock Classes="settings-group-label" Text="参数记忆"/>
                                     <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <TextBlock Text="文件命名" Classes="settings-group-title"/>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="同名自动改名" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="开启时追加序号，关闭时覆盖同名文件。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding AutoRename}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetAutoRenameCommand}" CommandParameter="False" AutomationProperties.Name="同名自动改名：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding AutoRename, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetAutoRenameCommand}" CommandParameter="True" AutomationProperties.Name="同名自动改名：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding AutoRename, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
-                                            </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="文档名前缀" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="未填写图层前缀时使用文档名称。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding LayerExportWithDocName}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportWithDocNameCommand}" CommandParameter="False" AutomationProperties.Name="文档名前缀：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding LayerExportWithDocName, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetLayerExportWithDocNameCommand}" CommandParameter="True" AutomationProperties.Name="文档名前缀：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding LayerExportWithDocName, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
-                                            </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="文档名优先" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="图层导出时，以文档名替代手动前缀。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding AutoUseDocNameAsPrefix}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetAutoUseDocNameAsPrefixCommand}" CommandParameter="False" AutomationProperties.Name="文档名优先：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding AutoUseDocNameAsPrefix, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetAutoUseDocNameAsPrefixCommand}" CommandParameter="True" AutomationProperties.Name="文档名优先：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding AutoUseDocNameAsPrefix, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
-                                            </Grid>
-                                        </StackPanel>
-                                    </controls:ContinuousBorder>
-                                    <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <TextBlock Text="参数记忆" Classes="settings-group-title"/>
-                                            <controls:ContinuousBorder Classes="settings-summary">
-                                                <TextBlock Text="输出位置、格式、质量与各模式参数会自动保存。" Classes="setting-description" TextWrapping="Wrap"/>
-                                            </controls:ContinuousBorder>
-                                            <TextBlock Text="清空也会记住，重启后恢复上次选择。" Classes="settings-caption"/>
-                                        </StackPanel>
+                                        <TextBlock Classes="settings-caption" Text="输出位置、格式、质量等参数自动保存，清空也会记住。"/>
                                     </controls:ContinuousBorder>
                                 </StackPanel>
-                                <StackPanel Classes="settings-page" IsVisible="{Binding IsSettingsLink}">
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowPhotoshopCard}">
+                                    <TextBlock Classes="settings-group-label" Text="Photoshop"/>
                                     <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <TextBlock Text="Photoshop" Classes="settings-group-title"/>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="前台识别" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="PSexp 获得前台焦点时通过 COM 识别一次；不打开外部脚本。失败时请手动刷新，详情见日志。"/>
+                                        <StackPanel>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowSyncSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="自动同步" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="置顶时按 Photoshop 文档变化自动同步；未置顶时在窗口获得焦点后同步。收纳、最小化及导出期间暂停，不定时轮询、不打开外部脚本。"/>
                                                 <Panel Grid.Column="1">
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding AutoRefreshOnActivated}">
                                                         <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetAutoRefreshOnActivatedCommand}" CommandParameter="False" AutomationProperties.Name="前台识别：关闭">
+                                                            <Button Classes="seg" Command="{Binding SetAutoRefreshOnActivatedCommand}" CommandParameter="False" AutomationProperties.Name="自动同步：关闭">
                                                                 <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
                                                                     <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding AutoRefreshOnActivated, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
                                                                 </controls:ContinuousBorder>
                                                             </Button>
-                                                            <Button Classes="seg" Command="{Binding SetAutoRefreshOnActivatedCommand}" CommandParameter="True" AutomationProperties.Name="前台识别：开启">
+                                                            <Button Classes="seg" Command="{Binding SetAutoRefreshOnActivatedCommand}" CommandParameter="True" AutomationProperties.Name="自动同步：开启">
                                                                 <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
                                                                     <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding AutoRefreshOnActivated, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
                                                                 </controls:ContinuousBorder>
@@ -977,34 +883,12 @@
                                             </Grid>
                                         </StackPanel>
                                     </controls:ContinuousBorder>
-                                    <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <TextBlock Text="数据与日志" Classes="settings-group-title"/>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,112" ColumnSpacing="12">
-                                                <StackPanel Spacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding DataDirectory}">
-                                                    <TextBlock Text="设置目录" Classes="setting-label"/>
-                                                    <TextBlock Text="偏好与默认参数" Classes="settings-caption"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Command="{Binding OpenDataDirectoryCommand}"
-                                                    Content="打开文件夹" ToolTip.Tip="{Binding DataDirectory}" AutomationProperties.Name="打开设置目录"/>
-                                            </Grid>
-                                            <controls:ContinuousBorder Classes="settings-separator"/>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,112" ColumnSpacing="12">
-                                                <StackPanel Spacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding LogFilePath}">
-                                                    <TextBlock Text="日志目录" Classes="setting-label"/>
-                                                    <TextBlock Text="运行及导出记录" Classes="settings-caption"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Command="{Binding OpenLogDirectoryCommand}"
-                                                    Content="打开文件夹" ToolTip.Tip="{Binding LogFilePath}" AutomationProperties.Name="打开日志目录"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </controls:ContinuousBorder>
                                 </StackPanel>
-                                <StackPanel Classes="settings-page" IsVisible="{Binding IsSettingsUpdate}">
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowUpdateCard}">
+                                    <TextBlock Classes="settings-group-label" Text="更新"/>
                                     <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <TextBlock Text="自动更新" Classes="settings-group-title"/>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                        <StackPanel>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowCheckSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <TextBlock Text="自动检测" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="启动后及每 6 小时检查一次。"/>
                                                 <Panel Grid.Column="1">
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding AutoCheckForUpdates}">
@@ -1023,7 +907,8 @@
                                                     </controls:AnimatedSegmentTrack>
                                                 </Panel>
                                             </Grid>
-                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowCheckDownloadLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowDownloadSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <TextBlock Text="后台下载" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="下载并校验后，由你确认重启安装。"/>
                                                 <Panel Grid.Column="1">
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding AutoDownloadUpdates}">
@@ -1042,36 +927,68 @@
                                                     </controls:AnimatedSegmentTrack>
                                                 </Panel>
                                             </Grid>
-                                        </StackPanel>
-                                    </controls:ContinuousBorder>
-                                    <controls:ContinuousBorder Classes="settings-section">
-                                        <StackPanel Spacing="12">
-                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="版本信息" Classes="settings-group-title" VerticalAlignment="Center"/>
-                                                <controls:ContinuousBorder Grid.Column="1" Background="{DynamicResource Brush.SettingsTrack}" CornerRadius="{StaticResource Radius.SegmentInner}" Padding="8,4">
-                                                    <TextBlock Text="{Binding UpdateVersionLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Brush.TextPrimary}"/>
-                                                </controls:ContinuousBorder>
-                                            </Grid>
-                                            <TextBlock Text="{Binding UpdateStatus}" Classes="setting-description" TextWrapping="Wrap"/>
-                                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding UpdateProgress}" IsVisible="{Binding IsUpdateBusy}" Height="4"/>
-                                            <StackPanel Spacing="8" IsVisible="{Binding HasUpdateChangelog}">
-                                                <controls:ContinuousBorder Classes="settings-separator"/>
-                                                <TextBlock Text="更新内容" Classes="setting-label"/>
-                                                <ScrollViewer MaxHeight="140" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                                    <TextBlock Text="{Binding UpdateChangelog}" Classes="setting-description" TextWrapping="Wrap"/>
-                                                </ScrollViewer>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDownloadVersionLine}"/>
+                                            <!-- 托盘"检查更新"按这个名字滚动定位，改名会让入口失效。 -->
+                                            <StackPanel x:Name="SettingsVersionCard" Spacing="8" IsVisible="{Binding ShowVersionCard}">
+                                                <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                    <TextBlock Text="当前版本" Classes="setting-label" VerticalAlignment="Center"/>
+                                                    <controls:ContinuousBorder Grid.Column="1" Background="{DynamicResource Brush.SettingsTrack}" CornerRadius="{StaticResource Radius.SegmentInner}" Padding="8,4" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding UpdateVersionLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Brush.TextPrimary}"/>
+                                                    </controls:ContinuousBorder>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" MinHeight="32">
+                                                    <TextBlock Text="{Binding UpdateStatus}" Classes="setting-description" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                    <Button Grid.Column="1" Classes="secondary settings-check-action" Content="检查更新" Command="{Binding CheckForUpdatesCommand}"/>
+                                                </Grid>
+                                                <ProgressBar Minimum="0" Maximum="100" Value="{Binding UpdateProgress}" IsVisible="{Binding IsUpdateBusy}" Height="4"/>
+                                                <StackPanel Spacing="8" IsVisible="{Binding HasUpdateChangelog}">
+                                                    <controls:ContinuousBorder Classes="settings-separator"/>
+                                                    <TextBlock Text="更新内容" Classes="setting-label"/>
+                                                    <ScrollViewer MaxHeight="140" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                                        <TextBlock Text="{Binding UpdateChangelog}" Classes="setting-description" TextWrapping="Wrap"/>
+                                                    </ScrollViewer>
+                                                </StackPanel>
+                                                <Button Classes="primary settings-update-action" Content="{Binding UpdateActionText}" Command="{Binding ApplyUpdateCommand}"
+                                                    HorizontalAlignment="Right" IsVisible="{Binding IsUpdateAvailable}"/>
+                                                <TextBlock Text="确认重启后安装；导出期间暂不安装。" Classes="settings-caption" IsVisible="{Binding IsUpdateAvailable}" ToolTip.Tip="更新会校验文件并保留旧版备份。"/>
                                             </StackPanel>
-                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                                <Button Classes="secondary" Content="检查更新" Command="{Binding CheckForUpdatesCommand}"/>
-                                                <Button Grid.Column="1" Classes="primary settings-update-action" Content="{Binding UpdateActionText}" Command="{Binding ApplyUpdateCommand}" IsVisible="{Binding IsUpdateAvailable}"/>
-                                            </Grid>
-                                            <TextBlock Text="确认重启后安装；导出期间暂不安装。" Classes="settings-caption" IsVisible="{Binding IsUpdateAvailable}" ToolTip.Tip="更新会校验文件并保留旧版备份。"/>
                                         </StackPanel>
                                     </controls:ContinuousBorder>
                                 </StackPanel>
-                            </Grid>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowDataCard}">
+                                    <TextBlock Classes="settings-group-label" Text="数据与日志"/>
+                                    <controls:ContinuousBorder Classes="settings-section">
+                                        <StackPanel>
+                                            <Grid Classes="settings-row settings-directory-row" IsVisible="{Binding ShowDataSetting}" ColumnDefinitions="*,112" ColumnSpacing="12">
+                                                <StackPanel Spacing="2" VerticalAlignment="Center" ToolTip.Tip="{Binding DataDirectory}">
+                                                    <TextBlock Text="设置目录" Classes="setting-label"/>
+                                                    <TextBlock Text="偏好与默认参数" Classes="settings-caption directory-caption"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Command="{Binding OpenDataDirectoryCommand}"
+                                                    Content="打开文件夹" ToolTip.Tip="{Binding DataDirectory}" AutomationProperties.Name="打开设置目录"/>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDataLogLine}"/>
+                                            <Grid Classes="settings-row settings-directory-row" IsVisible="{Binding ShowLogSetting}" ColumnDefinitions="*,112" ColumnSpacing="12">
+                                                <StackPanel Spacing="2" VerticalAlignment="Center" ToolTip.Tip="{Binding LogFilePath}">
+                                                    <TextBlock Text="日志目录" Classes="setting-label"/>
+                                                    <TextBlock Text="运行及导出记录" Classes="settings-caption directory-caption"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Command="{Binding OpenLogDirectoryCommand}"
+                                                    Content="打开文件夹" ToolTip.Tip="{Binding LogFilePath}" AutomationProperties.Name="打开日志目录"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </controls:ContinuousBorder>
+                                </StackPanel>
+                                <controls:ContinuousBorder Classes="settings-section" IsVisible="{Binding HasNoSettingsSearchResults}" Padding="20,26">
+                                    <StackPanel Spacing="10" HorizontalAlignment="Center">
+                                        <TextBlock Text="没有找到相关设置" FontWeight="SemiBold" TextAlignment="Center"/>
+                                        <TextBlock Text="试试“主题”“托盘”或“更新”" Classes="settings-caption" TextAlignment="Center"/>
+                                        <Button Content="清空搜索" Command="{Binding ClearSettingsSearchCommand}" Click="OnClearSettingsSearchClick" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </controls:ContinuousBorder>
+                            </StackPanel>
                         </ScrollViewer>
-                        <StackPanel Grid.Row="3" Spacing="8" Width="{Binding #SettingsPageHost.Bounds.Width}" HorizontalAlignment="Left">
+                        <StackPanel Grid.Row="3" Spacing="8" Margin="16,0">
                             <controls:ContinuousBorder Classes="settings-separator"/>
                             <TextBlock Text="{Binding SettingsStatusText}" Classes="settings-caption" TextWrapping="Wrap"/>
                         </StackPanel>

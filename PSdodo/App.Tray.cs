@@ -113,8 +113,7 @@ public partial class App
     {
         if (_trayWindow is not { } window || _trayModel is not { } model) return;
         window.ActivateFromExternalRequest();
-        if (updates) model.SelectedSettingsSection = 3;
-        model.IsViewSetting = true;
+        model.OpenSettingsPage(updates);
     }
 
     private void CheckUpdatesFromTray()

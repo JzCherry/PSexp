@@ -81,7 +81,7 @@ public sealed class ExportService : IExportService
                 temporarySettings,
                 onProgress,
                 ct);
-            var merged = MergeArtboardOutputs(result, finalDirectory, settings.AutoRename);
+            var merged = MergeArtboardOutputs(result, finalDirectory, settings.AutoRename, settings.FilePrefix);
             delivered = merged.Success;
             return merged;
         }
@@ -107,11 +107,13 @@ public sealed class ExportService : IExportService
         Quality = source.Quality,
         AutoRename = source.AutoRename,
         FileName = source.FileName,
+        FilePrefix = source.FilePrefix,
         SliceFolderName = source.SliceFolderName,
         ImageName = source.ImageName,
         LayerExportWithDocName = source.LayerExportWithDocName,
         LayerExportRecursive = source.LayerExportRecursive,
         LayerExportSelectedOnly = source.LayerExportSelectedOnly,
+        LayerTopLevelSelectedOnly = source.LayerTopLevelSelectedOnly,
         LayerExportShowHint = source.LayerExportShowHint,
         ExportPathOption = source.ExportPathOption,
         ExpectedFileCount = source.ExpectedFileCount,
@@ -121,7 +123,12 @@ public sealed class ExportService : IExportService
     public static PsBridgeResult MergeArtboardOutputs(
         PsBridgeResult result,
         string finalDirectory,
-        bool autoRename)
+        bool autoRename,
+        string filePrefix = "")
+        => MergeNamedOutputs(result, finalDirectory, autoRename, filePrefix, "画板");
+
+    private static PsBridgeResult MergeNamedOutputs(
+        PsBridgeResult result, string finalDirectory, bool autoRename, string filePrefix, string outputKind)
     {
         if (result.OutputFiles.Count == 0) return result;
 
@@ -131,9 +138,11 @@ public sealed class ExportService : IExportService
         try
         {
             Directory.CreateDirectory(finalDirectory);
+            var prefix = ExportFilePrefix.Normalize(filePrefix);
             foreach (var sourcePath in result.OutputFiles)
             {
-                var desiredPath = Path.Combine(finalDirectory, Path.GetFileName(sourcePath));
+                var originalName = Path.GetFileName(sourcePath);
+                var desiredPath = Path.Combine(finalDirectory, prefix.Length == 0 ? originalName : prefix + "_" + originalName);
                 var targetPath = autoRename ? GetAvailableFilePath(desiredPath) : desiredPath;
                 currentSource = sourcePath;
                 currentTarget = targetPath;
@@ -162,15 +171,44 @@ public sealed class ExportService : IExportService
                 ReturnValue = result.ReturnValue,
                 ExportedCount = movedFiles.Count,
                 OutputFiles = movedFiles,
-                Error = new IOException($"画板归并失败：源={currentSource}；目标={currentTarget}；覆盖={!autoRename}；HResult=0x{ex.HResult:X8}；{ex.Message}", ex),
+                Error = new IOException($"{outputKind}归并失败：源={currentSource}；目标={currentTarget}；覆盖={!autoRename}；HResult=0x{ex.HResult:X8}；{ex.Message}", ex),
                 Logs = result.Logs
             };
         }
     }
 
-    // 图层使用一级/递归脚本；切片使用独立的原生切片脚本。
+    // 一级图层保持完整画布合成；图层模式走与画板相同的原生选区导出。
     public Task<PsBridgeResult> ExportLayersAsync(ExportSettings s, ExportProgressHandler? onProgress = null, CancellationToken ct = default)
-        => ExportLayerBatchAsync(s, sliceMode: false, onProgress, ct);
+        => s.LayerExportRecursive ? ExportNativeLayersAsync(s, onProgress, ct)
+            : ExportLayerBatchAsync(s, sliceMode: false, onProgress, ct);
+
+    private async Task<PsBridgeResult> ExportNativeLayersAsync(
+        ExportSettings settings, ExportProgressHandler? onProgress, CancellationToken ct)
+    {
+        var temporaryDirectory = Path.Combine(Path.GetTempPath(), "PSexp", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temporaryDirectory);
+        var delivered = false;
+        try
+        {
+            var temporarySettings = CloneWithExportPath(settings, temporaryDirectory);
+            var args = BuildCommonArgs(temporarySettings);
+            args["SELECTED_ONLY"] = settings.LayerExportSelectedOnly ? "true" : "false";
+            _logger.Info($"图层模式使用 Photoshop 原生选区导出；selectedOnly={settings.LayerExportSelectedOnly}；临时目录={temporaryDirectory}");
+            var result = await ExecuteUxpScriptAsync(ScriptNames.ExportNativeLayers, args, temporarySettings, onProgress, ct);
+            var merged = MergeNamedOutputs(result, settings.ExportPath, settings.AutoRename, settings.FilePrefix, "图层");
+            delivered = merged.Success;
+            return merged;
+        }
+        finally
+        {
+            try
+            {
+                if (delivered && Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory, recursive: true);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
 
     public Task<PsBridgeResult> ExportSlicesAsync(ExportSettings s, ExportProgressHandler? onProgress = null, CancellationToken ct = default)
         => ExportLayerBatchAsync(CloneWithExportPath(s, ResolveSliceExportPath(s)), sliceMode: true, onProgress, ct);
@@ -190,7 +228,7 @@ public sealed class ExportService : IExportService
         args["FILE_NAME"] = ScriptParameterInjector.EscapeJsString(s.FileName);
         args["SLICE_MODE"] = sliceMode ? "true" : "false";
         args["RECURSIVE"] = s.LayerExportRecursive ? "true" : "false";
-        args["SELECTED_ONLY"] = s.LayerExportRecursive && s.LayerExportSelectedOnly ? "true" : "false";
+        args["SELECTED_ONLY"] = (s.LayerExportRecursive ? s.LayerExportSelectedOnly : s.LayerTopLevelSelectedOnly) ? "true" : "false";
         return await ExecuteReceiptTaskAsync(ScriptLibrary.GetScript(sliceMode ? ScriptNames.ExportSlices : ScriptNames.ExportLayerBatch), args, s, onProgress, ct);
     }
 
@@ -475,7 +513,7 @@ public sealed class ExportService : IExportService
             new Dictionary<string, string>
             {
                 ["SCRIPT_BODY"] = body,
-                ["WAIT_FOR_BACKGROUND_EXPORT"] = scriptName is ScriptNames.ExportAllArtboards or ScriptNames.ExportSelectedArtboards ? "true" : "false",
+                ["WAIT_FOR_BACKGROUND_EXPORT"] = scriptName is ScriptNames.ExportAllArtboards or ScriptNames.ExportSelectedArtboards or ScriptNames.ExportNativeLayers ? "true" : "false",
                 ["EXPORT_FORMAT"] = s.Format.ToScriptString(),
                 ["EXPECTED_FILE_COUNT"] = Math.Max(0, s.ExpectedFileCount ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture)
             }, s, onProgress, ct);

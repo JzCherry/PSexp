@@ -25,6 +25,9 @@ public sealed class ExportSettings
     /// <summary>切片导出时的文件名前缀</summary>
     public string FileName { get; set; } = string.Empty;
 
+    /// <summary>Batch-export prefix; empty keeps the original filename.</summary>
+    public string FilePrefix { get; set; } = string.Empty;
+
     /// <summary>切片子文件夹名，空值直接保存到输出目录。</summary>
     public string SliceFolderName { get; set; } = string.Empty;
 
@@ -35,6 +38,7 @@ public sealed class ExportSettings
     public bool LayerExportWithDocName { get; set; } = true;
     public bool LayerExportRecursive { get; set; }
     public bool LayerExportSelectedOnly { get; set; } = true;
+    public bool LayerTopLevelSelectedOnly { get; set; }
 
     /// <summary>兼容旧设置字段；当前导出结果统一由软件内状态栏展示，不触发 Photoshop 提示。</summary>
     public bool LayerExportShowHint { get; set; }

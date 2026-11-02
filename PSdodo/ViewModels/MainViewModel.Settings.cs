@@ -15,26 +15,7 @@ public partial class MainViewModel
     }
     [RelayCommand] private void SetCloseToTray(object? value) => CloseToTray = ParseBooleanCommandParameter(value);
 
-    [ObservableProperty] private int _selectedSettingsSection;
-    public bool IsSettingsGeneral => SelectedSettingsSection == 0;
-    public bool IsSettingsExport => SelectedSettingsSection == 1;
-    public bool IsSettingsLink => SelectedSettingsSection == 2;
-    public bool IsSettingsUpdate => SelectedSettingsSection == 3;
     public string LogFilePath => _fileLogger.LogPath;
-    partial void OnSelectedSettingsSectionChanged(int value)
-    {
-        OnPropertyChanged(nameof(IsSettingsGeneral));
-        OnPropertyChanged(nameof(IsSettingsExport));
-        OnPropertyChanged(nameof(IsSettingsLink));
-        OnPropertyChanged(nameof(IsSettingsUpdate));
-        QueueParameterMemory();
-    }
-    [RelayCommand] private void SelectSettingsSection(object? value)
-    {
-        if (int.TryParse(value?.ToString(), out var section) && section is >= 0 and <= 3)
-            SelectedSettingsSection = section;
-    }
-    [RelayCommand] private void HideSettings() => IsViewSetting = false;
     [RelayCommand] private void OpenLogDirectory()
     {
         try
