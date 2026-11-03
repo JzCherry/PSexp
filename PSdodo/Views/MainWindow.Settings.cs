@@ -3,6 +3,8 @@ using System.Diagnostics;
 using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input.Platform;
+using PsExporter.Core.Automation;
 using PsExporter.ViewModels;
 
 namespace PsExporter.Views;
@@ -30,6 +32,30 @@ public partial class MainWindow
         {
             if (IsActive && SettingsSearchInput.IsEffectivelyVisible) SettingsSearchInput.Focus();
         }, DispatcherPriority.Loaded);
+    }
+
+    private async void OnCopyAutomationCommandClick(object? sender, RoutedEventArgs args)
+    {
+        if (sender is not Button { Content: "复制指令" } button || DataContext is not MainViewModel model
+            || Environment.ProcessPath is not { } executable || Clipboard is not { } clipboard) return;
+
+        var isPreset = button.CommandParameter is "preset";
+        var presetId = isPreset ? model.CurrentPresetCommandId : null;
+        if (isPreset && presetId is null) return;
+
+        button.Content = "复制中…";
+        try
+        {
+            await clipboard.SetTextAsync(ExportInvocation.BuildPowerShellCommand(executable, presetId));
+            button.Content = "已复制";
+        }
+        catch (Exception)
+        {
+            button.Content = "复制失败";
+        }
+
+        await Task.Delay(1400);
+        button.Content = "复制指令";
     }
 
     private void BeginSettingsPageFade()

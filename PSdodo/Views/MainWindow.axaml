@@ -980,6 +980,33 @@
                                         </StackPanel>
                                     </controls:ContinuousBorder>
                                 </StackPanel>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowAutomationCard}">
+                                    <TextBlock Classes="settings-group-label" Text="外部调用"/>
+                                    <controls:ContinuousBorder Classes="settings-section">
+                                        <StackPanel>
+                                            <Grid Classes="settings-row settings-directory-row" ColumnDefinitions="*,112" ColumnSpacing="12">
+                                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                    <TextBlock Text="当前参数" Classes="setting-label"/>
+                                                    <TextBlock Text="按调用时的界面参数导出" Classes="settings-caption directory-caption"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Content="复制指令"
+                                                    Click="OnCopyAutomationCommandClick" AutomationProperties.Name="复制当前参数导出指令"
+                                                    ToolTip.Tip="复制 PowerShell 指令，可交给 yuSnip 或 Quicker 触发"/>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator"/>
+                                            <Grid Classes="settings-row settings-directory-row" ColumnDefinitions="*,112" ColumnSpacing="12">
+                                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                    <TextBlock Text="当前预设" Classes="setting-label"/>
+                                                    <TextBlock Text="{Binding AutomationPresetHint}" Classes="settings-caption directory-caption"
+                                                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding AutomationPresetHint}"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Content="复制指令"
+                                                    Click="OnCopyAutomationCommandClick" CommandParameter="preset" IsEnabled="{Binding HasCurrentPreset}"
+                                                    AutomationProperties.Name="复制当前预设导出指令" ToolTip.Tip="使用这份预设已保存的参数导出"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </controls:ContinuousBorder>
+                                </StackPanel>
                                 <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowUpdateCard}">
                                     <TextBlock Classes="settings-group-label" Text="更新"/>
                                     <controls:ContinuousBorder Classes="settings-section">

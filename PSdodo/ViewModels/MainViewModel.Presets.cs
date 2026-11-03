@@ -216,7 +216,7 @@ public partial class MainViewModel
 
     private void NotifyPresetProperties()
     {
-        foreach (var name in new[] { nameof(PresetDisplayName), nameof(IsPresetModified), nameof(PresetStateText), nameof(HasCurrentPreset), nameof(ShowPresetUpdate), nameof(CanEditCurrentPreset), nameof(CanRestorePreset), nameof(CanSaveCurrentPreset), nameof(HasCustomPresets), nameof(PresetPickerHint), nameof(CanManagePresets) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(PresetDisplayName), nameof(AutomationPresetHint), nameof(IsPresetModified), nameof(PresetStateText), nameof(HasCurrentPreset), nameof(ShowPresetUpdate), nameof(CanEditCurrentPreset), nameof(CanRestorePreset), nameof(CanSaveCurrentPreset), nameof(HasCustomPresets), nameof(PresetPickerHint), nameof(CanManagePresets) }) OnPropertyChanged(name);
         for (var index = 0; index < AvailablePresets.Count; index++)
         {
             var item = AvailablePresets[index];

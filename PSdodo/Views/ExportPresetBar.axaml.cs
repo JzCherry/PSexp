@@ -7,6 +7,7 @@ using Avalonia.Input.Platform;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using PsExporter.Core.Automation;
 using PsExporter.ViewModels;
 
 namespace PsExporter.Views;
@@ -49,8 +50,7 @@ public partial class ExportPresetBar : UserControl
         PresetMore.Flyout?.Hide();
         try
         {
-            static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
-            await clipboard.SetTextAsync($"& {Quote(executable)} --preset-id {Quote(id)}");
+            await clipboard.SetTextAsync(ExportInvocation.BuildPowerShellCommand(executable, id));
             model.PresetStatusMessage = "已复制导出指令";
         }
         catch (Exception)

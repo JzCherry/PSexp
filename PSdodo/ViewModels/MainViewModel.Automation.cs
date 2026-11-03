@@ -7,6 +7,9 @@ namespace PsExporter.ViewModels;
 public partial class MainViewModel
 {
     internal string? CurrentPresetCommandId => CurrentPreset?.Id;
+    public string AutomationPresetHint => CurrentPreset is { } preset
+        ? $"使用「{preset.Name}」已保存的参数"
+        : "先在导出页选择一份预设";
 
     internal bool TryStartExternalExport(ExportInvocation request)
     {

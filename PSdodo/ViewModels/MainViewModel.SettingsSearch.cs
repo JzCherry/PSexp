@@ -15,6 +15,7 @@ public partial class MainViewModel
         new("Edge", "窗口 贴边收纳 屏幕边缘 悬浮入口 自动隐藏 展开 吸附 dock edge"),
         new("Delay", "窗口 贴边收纳 收回等待 延时 延迟 快速 标准 从容 250 420 800 毫秒 delay"),
         new("Sync", "Photoshop PS 联动 自动同步 文档识别 读取 置顶 焦点 刷新 document refresh sync"),
+        new("Automation", "外部调用 导出指令 当前参数 当前预设 脚本 命令行 快捷键 扩展按键 自动化 PowerShell yuSnip Quicker automation command"),
         new("Data", "数据与日志 设置目录 配置目录 预设数据 偏好 默认参数 文件夹 data settings directory configuration"),
         new("Log", "数据与日志 日志目录 运行记录 导出记录 报错 调试 psx.log log debug directory"),
         new("Check", "自动更新 自动检测 启动检查 检测更新 检查更新 周期 update check"),
@@ -32,6 +33,7 @@ public partial class MainViewModel
     public bool ShowTraySetting => _matchingSettings.Contains("Tray");
     public bool ShowEdgeSetting => _matchingSettings.Contains("Edge");
     public bool ShowDelaySetting => _matchingSettings.Contains("Delay");
+    public bool ShowAutomationCard => _matchingSettings.Contains("Automation");
     public bool ShowSyncSetting => _matchingSettings.Contains("Sync");
     public bool ShowDataSetting => _matchingSettings.Contains("Data");
     public bool ShowLogSetting => _matchingSettings.Contains("Log");
@@ -62,7 +64,7 @@ public partial class MainViewModel
         {
             nameof(HasSettingsSearchText), nameof(IsSearchingSettings), nameof(HasNoSettingsSearchResults), nameof(SettingsSearchSummary),
             nameof(ShowThemeSetting), nameof(ShowTraySetting), nameof(ShowEdgeSetting), nameof(ShowDelaySetting),
-            nameof(ShowSyncSetting),
+            nameof(ShowSyncSetting), nameof(ShowAutomationCard),
             nameof(ShowDataSetting), nameof(ShowLogSetting), nameof(ShowCheckSetting), nameof(ShowDownloadSetting), nameof(ShowVersionCard),
             nameof(ShowUiWindowCard), nameof(ShowPhotoshopCard), nameof(ShowUpdateCard), nameof(ShowDataCard),
             nameof(ShowThemeTrayLine), nameof(ShowTrayEdgeLine), nameof(ShowEdgeDelayLine),

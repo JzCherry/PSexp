@@ -27,6 +27,12 @@ internal sealed record ExportInvocation(ExportPresetCategory? Category = null, s
         return invocation is not null;
     }
 
+    internal static string BuildPowerShellCommand(string executable, string? presetId = null)
+    {
+        static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+        return "& " + Quote(executable) + (presetId is null ? " --export" : " --preset-id " + Quote(presetId));
+    }
+
     private static bool IsValidReference(string? value)
         => !string.IsNullOrWhiteSpace(value) && value.Length <= 128 && !value.Any(char.IsControl);
 }
