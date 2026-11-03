@@ -59,12 +59,14 @@
     <SolidColorBrush x:Key="Brush.SettingsCard" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="Brush.SettingsBorder" Color="#E1E5EF"/>
     <SolidColorBrush x:Key="Brush.SettingsTrack" Color="#EEF1F6"/>
+    <SolidColorBrush x:Key="Brush.OwnedWindowBorder" Color="#A7B2C7"/>
     <SolidColorBrush x:Key="Brush.SettingsSelected" Color="{StaticResource Color.Accent}"/>
     <CornerRadius x:Key="Radius.SettingsCard">16</CornerRadius>
 
     <!-- Space reserved outside the surface so the window shadow is not clipped. -->
     <Thickness x:Key="Window.ShadowMargin">12</Thickness>
     <BoxShadows x:Key="Shadow.Window">0 3 12 0 #30000000, 0 1 3 0 #18000000</BoxShadows>
+    <BoxShadows x:Key="Shadow.OwnedWindow">0 3 9 0 #58000000, 0 1 3 0 #28000000</BoxShadows>
 
     <BoxShadows x:Key="Shadow.Menu">0 2 8 0 #30000000</BoxShadows>
 
@@ -90,6 +92,7 @@
     <CornerRadius x:Key="Radius.Sm">12</CornerRadius>
     <CornerRadius x:Key="Radius.Md">20</CornerRadius>
     <CornerRadius x:Key="Radius.Lg">28</CornerRadius>
+    <CornerRadius x:Key="Radius.ExportNotice">34</CornerRadius>
     <CornerRadius x:Key="Radius.Pill">12</CornerRadius>
 
     <CornerRadius x:Key="Radius.SegmentInner">10</CornerRadius>

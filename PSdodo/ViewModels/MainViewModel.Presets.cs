@@ -198,24 +198,31 @@ public partial class MainViewModel
         return true;
     }
 
+    /// <summary>某个板块的预设行读数；导出页的下拉与导出指令窗口共用，同一份参数只有一种写法。</summary>
+    internal IReadOnlyList<ExportPresetListItem> BuildPresetChoices(ExportPresetCategory category, string? selectedId)
+    {
+        var choices = new List<ExportPresetListItem>();
+        foreach (var item in _presets.Items.Where(entry => entry.Category == category))
+        {
+            var format = ExportPresetCatalog.DescribeFormat(item.Parameters);
+            var scope = ExportPresetCatalog.DescribeScope(category, item.Parameters);
+            choices.Add(new(item.Id, item.Name, scope.Length == 0 ? format : format + " · " + scope,
+                item.Id == selectedId) { FormatSummary = format });
+        }
+        return choices;
+    }
+
     private void RebuildPresetList()
     {
         AvailablePresets.Clear();
-        foreach (var item in _presets.Items.Where(item => item.Category == _activePresetCategory))
-        {
-            var p = item.Parameters;
-            var formatSummary = p.Format == ExportFormat.Png ? "PNG" : $"JPG · {p.Quality}%";
-            var summary = formatSummary
-                + (item.Category == ExportPresetCategory.Artboards ? p.Mode == ExportMode.SelectedArtboards ? " · 选中画板" : " · 全部画板" : "")
-                + (item.Category == ExportPresetCategory.Layers
-                    ? (p.LayerRecursive ? " · 图层素材" : " · 画布合成") + (p.LayerScopeSelectedOnly == true ? " · 选中" : " · 全部") : "");
-            AvailablePresets.Add(new(item.Id, item.Name, summary, item.Id == CurrentPresetWorkspace.SelectedPresetId) { FormatSummary = formatSummary });
-        }
+        foreach (var item in BuildPresetChoices(_activePresetCategory, CurrentPresetWorkspace.SelectedPresetId))
+            AvailablePresets.Add(item);
         NotifyPresetProperties();
     }
 
     private void NotifyPresetProperties()
     {
+        AutomationPresetsChanged?.Invoke();
         foreach (var name in new[] { nameof(PresetDisplayName), nameof(AutomationPresetHint), nameof(IsPresetModified), nameof(PresetStateText), nameof(HasCurrentPreset), nameof(ShowPresetUpdate), nameof(CanEditCurrentPreset), nameof(CanRestorePreset), nameof(CanSaveCurrentPreset), nameof(HasCustomPresets), nameof(PresetPickerHint), nameof(CanManagePresets) }) OnPropertyChanged(name);
         for (var index = 0; index < AvailablePresets.Count; index++)
         {

@@ -7,6 +7,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://PSexpV3/Styles/DesignTokens.axaml"/>
+                <ResourceInclude Source="avares://PSexpV3/Styles/Flyouts.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

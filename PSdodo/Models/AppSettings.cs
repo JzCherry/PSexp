@@ -9,6 +9,9 @@ public sealed class AppSettings
     public const double MinimumWindowHeight = 600;
     public const double WindowAspectRatio = 3d / 4d;
 
+    public const double MinimumCommandWindowHeight = 480;
+    public const int DefaultExportNoticeDurationSeconds = 5;
+
     /// <summary>自定义目录；切换到文档位置或桌面时仍保留。</summary>
     public string DefaultExportPath { get; set; } = string.Empty;
 
@@ -65,6 +68,10 @@ public sealed class AppSettings
     public bool AutoCheckForUpdates { get; set; } = true;
     public bool AutoDownloadUpdates { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
+    public bool ShowExportNotice { get; set; } = true;
+    public bool ExportTempDocumentsToDesktop { get; set; } = true;
+    public int ExportNoticeDurationSeconds { get; set; } = DefaultExportNoticeDurationSeconds;
+    public ExportNoticeTarget ExportNoticeTarget { get; set; }
     public int DockRetractDelayMs { get; set; } = 420;
 
     public WindowPlacementState? WindowPlacement { get; set; }
@@ -74,4 +81,16 @@ public sealed class AppSettings
 
     /// <summary>上次正常窗口高度</summary>
     public double WindowHeight { get; set; } = DefaultWindowHeight;
+
+    /// <summary>导出指令窗口上次的参数来源；默认仍是「指定预设」，与改名前的打开状态一致。</summary>
+    public bool ExportCommandUsePreset { get; set; } = true;
+
+    /// <summary>导出指令窗口里各板块上次选中的预设；键是板块名，值为预设 ID。</summary>
+    public Dictionary<string, string?> ExportCommandPresets { get; set; } = [];
+
+    /// <summary>导出指令窗口上次的尺寸；0 表示从未记录，用默认值。</summary>
+    public double ExportCommandWindowWidth { get; set; }
+
+    public double ExportCommandWindowHeight { get; set; }
+    public int ExportCommandWindowSizeVersion { get; set; }
 }

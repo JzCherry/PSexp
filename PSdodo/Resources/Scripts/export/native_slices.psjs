@@ -6,6 +6,7 @@ const resultFolderUrl = "{{RESULT_FOLDER_URL}}";
 const format = "{{FORMAT}}".toLowerCase();
 const quality = {{QUALITY}};
 const rename = {{RENAME}};
+const existing = new Set({{EXISTING_EXPORT_NAMES}}.map(name => name.toLowerCase()));
 const fileName = "{{FILE_NAME}}";
 const state = { done: false, success: false, files: [], error: "", slices: [] };
 let resultFile;
@@ -38,7 +39,6 @@ async function exportSlices(context) {
     stage = "读取切片输出目录";
     activePath = exportFolderUrl;
     const folder = await fs.getEntryWithUrl(exportFolderUrl);
-    const existing = new Set((await folder.getEntries()).map(entry => entry.name.toLowerCase()));
     await report();
     if (context.isCancelled) throw new Error("Photoshop 已取消切片导出");
     let copy;

@@ -26,21 +26,6 @@
         Classes="quality-motion"
         Topmost="{Binding EffectiveTopmost}">
 
-    <Window.Resources>
-        <ControlTheme x:Key="LayerHelpFlyoutTheme" TargetType="FlyoutPresenter">
-            <Setter Property="Cursor" Value="Arrow"/>
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <controls:ContinuousBorder Margin="8" Padding="14"
-                        Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
-                        CornerRadius="{StaticResource Radius.Md}" BoxShadow="{StaticResource Shadow.Menu}">
-                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                    </controls:ContinuousBorder>
-                </ControlTemplate>
-            </Setter>
-        </ControlTheme>
-    </Window.Resources>
-
     <Grid x:Name="WindowSurface" ClipToBounds="True">
     <Grid x:Name="RootGrid">
         <controls:ContinuousBorder x:Name="MainContentBorder"
@@ -456,7 +441,7 @@
                                                             </Viewbox>
                                                             <Button.Flyout>
                                                                 <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedLeft"
-                                                                    FlyoutPresenterTheme="{StaticResource LayerHelpFlyoutTheme}" Opened="OnLayerHelpOpened" Closed="OnLayerHelpClosed">
+                                                                    FlyoutPresenterTheme="{StaticResource CardFlyoutTheme}" Opened="OnLayerHelpOpened" Closed="OnLayerHelpClosed">
                                                                     <StackPanel Spacing="10" MaxWidth="276" Cursor="Arrow" KeyDown="OnLayerHelpKeyDown">
                                                                         <StackPanel.Styles>
                                                                             <Style Selector="SelectableTextBlock">
@@ -719,7 +704,7 @@
                                                         CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
                                                         <TextBox Background="Transparent" BorderThickness="0" Text="{Binding ResolvedExportPath, Mode=OneWay}"
                                                             IsReadOnly="True" PlaceholderText="等待获取输出位置" AutomationProperties.Name="输出路径（只读）"
-                                                            ToolTip.Tip="{Binding ResolvedExportPath}"
+                                                            ToolTip.Tip="{Binding DestinationPathHint}"
                                                             VerticalContentAlignment="Center" Padding="10,0"/>
                                                     </controls:ContinuousBorder>
                                                     <TextBlock Text="{Binding DestinationHint}" IsVisible="{Binding !HasExportTarget}"
@@ -980,32 +965,109 @@
                                         </StackPanel>
                                     </controls:ContinuousBorder>
                                 </StackPanel>
-                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowAutomationCard}">
-                                    <TextBlock Classes="settings-group-label" Text="外部调用"/>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowTempDestinationCard}">
+                                    <TextBlock Classes="settings-group-label" Text="导出位置"/>
+                                    <controls:ContinuousBorder Classes="settings-section">
+                                        <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="临时文档导出到桌面" Classes="setting-label"/>
+                                                <TextBlock Text="仅在选择「文档位置」时生效" Classes="settings-caption"/>
+                                            </StackPanel>
+                                            <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center"
+                                                SelectionValue="{Binding ExportTempDocumentsToDesktop}">
+                                                <controls:SegmentPanel>
+                                                    <Button Classes="seg" Command="{Binding SetExportTempDocumentsToDesktopCommand}" CommandParameter="False"
+                                                        AutomationProperties.Name="临时文档导出到桌面：关闭">
+                                                        <TextBlock Text="关闭" Classes="mode-label"
+                                                            Foreground="{Binding ExportTempDocumentsToDesktop, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
+                                                    </Button>
+                                                    <Button Classes="seg" Command="{Binding SetExportTempDocumentsToDesktopCommand}" CommandParameter="True"
+                                                        AutomationProperties.Name="临时文档导出到桌面：开启">
+                                                        <TextBlock Text="开启" Classes="mode-label"
+                                                            Foreground="{Binding ExportTempDocumentsToDesktop, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
+                                                    </Button>
+                                                </controls:SegmentPanel>
+                                            </controls:AnimatedSegmentTrack>
+                                        </Grid>
+                                    </controls:ContinuousBorder>
+                                </StackPanel>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowNoticeCard}">
+                                    <TextBlock Classes="settings-group-label" Text="导出提示"/>
                                     <controls:ContinuousBorder Classes="settings-section">
                                         <StackPanel>
-                                            <Grid Classes="settings-row settings-directory-row" ColumnDefinitions="*,112" ColumnSpacing="12">
-                                                <StackPanel Spacing="2" VerticalAlignment="Center">
-                                                    <TextBlock Text="当前参数" Classes="setting-label"/>
-                                                    <TextBlock Text="按调用时的界面参数导出" Classes="settings-caption directory-caption"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Content="复制指令"
-                                                    Click="OnCopyAutomationCommandClick" AutomationProperties.Name="复制当前参数导出指令"
-                                                    ToolTip.Tip="复制 PowerShell 指令，可交给 yuSnip 或 Quicker 触发"/>
+                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ShowNoticeSetting}">
+                                                <TextBlock Text="完成提示" Classes="setting-label" VerticalAlignment="Center"/>
+                                                <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center"
+                                                    SelectionValue="{Binding ShowExportNotice}">
+                                                    <controls:SegmentPanel>
+                                                        <Button Classes="seg" Command="{Binding SetShowExportNoticeCommand}" CommandParameter="False" AutomationProperties.Name="完成提示：关闭">
+                                                            <TextBlock Text="关闭" Classes="mode-label"
+                                                                Foreground="{Binding ShowExportNotice, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
+                                                        </Button>
+                                                        <Button Classes="seg" Command="{Binding SetShowExportNoticeCommand}" CommandParameter="True" AutomationProperties.Name="完成提示：开启">
+                                                            <TextBlock Text="开启" Classes="mode-label"
+                                                                Foreground="{Binding ShowExportNotice, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
+                                                        </Button>
+                                                    </controls:SegmentPanel>
+                                                </controls:AnimatedSegmentTrack>
                                             </Grid>
-                                            <controls:ContinuousBorder Classes="settings-separator"/>
-                                            <Grid Classes="settings-row settings-directory-row" ColumnDefinitions="*,112" ColumnSpacing="12">
-                                                <StackPanel Spacing="2" VerticalAlignment="Center">
-                                                    <TextBlock Text="当前预设" Classes="setting-label"/>
-                                                    <TextBlock Text="{Binding AutomationPresetHint}" Classes="settings-caption directory-caption"
-                                                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding AutomationPresetHint}"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Content="复制指令"
-                                                    Click="OnCopyAutomationCommandClick" CommandParameter="preset" IsEnabled="{Binding HasCurrentPreset}"
-                                                    AutomationProperties.Name="复制当前预设导出指令" ToolTip.Tip="使用这份预设已保存的参数导出"/>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowNoticeLine}"/>
+                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ShowNoticeDurationSetting}">
+                                                <TextBlock Text="停留时间" Classes="setting-label" VerticalAlignment="Center"/>
+                                                <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center"
+                                                    SelectionValue="{Binding ExportNoticeDurationSeconds}">
+                                                    <controls:SegmentPanel>
+                                                        <Button Classes="seg" Command="{Binding SetExportNoticeDurationCommand}" CommandParameter="3" AutomationProperties.Name="停留时间：3 秒">
+                                                            <TextBlock Text="3 秒" Classes="mode-label"
+                                                                Foreground="{Binding ExportNoticeDurationSeconds, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=3}"/>
+                                                        </Button>
+                                                        <Button Classes="seg" Command="{Binding SetExportNoticeDurationCommand}" CommandParameter="5" AutomationProperties.Name="停留时间：5 秒">
+                                                            <TextBlock Text="5 秒" Classes="mode-label"
+                                                                Foreground="{Binding ExportNoticeDurationSeconds, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=5}"/>
+                                                        </Button>
+                                                        <Button Classes="seg" Command="{Binding SetExportNoticeDurationCommand}" CommandParameter="10" AutomationProperties.Name="停留时间：10 秒">
+                                                            <TextBlock Text="10 秒" Classes="mode-label"
+                                                                Foreground="{Binding ExportNoticeDurationSeconds, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=10}"/>
+                                                        </Button>
+                                                    </controls:SegmentPanel>
+                                                </controls:AnimatedSegmentTrack>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowNoticeDurationLine}"/>
+                                            <Grid Classes="settings-row" ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding ShowNoticeTargetSetting}">
+                                                <TextBlock Text="点击打开" Classes="setting-label" VerticalAlignment="Center"/>
+                                                <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center"
+                                                    SelectionValue="{Binding ExportNoticeTarget}">
+                                                    <controls:SegmentPanel>
+                                                        <Button Classes="seg" Command="{Binding SetExportNoticeTargetCommand}" CommandParameter="{x:Static models:ExportNoticeTarget.OutputFolder}" AutomationProperties.Name="点击打开：输出目录">
+                                                            <TextBlock Text="输出目录" Classes="mode-label"
+                                                                Foreground="{Binding ExportNoticeTarget, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:ExportNoticeTarget.OutputFolder}}"/>
+                                                        </Button>
+                                                        <Button Classes="seg" Command="{Binding SetExportNoticeTargetCommand}" CommandParameter="{x:Static models:ExportNoticeTarget.ParentFolder}" AutomationProperties.Name="点击打开：上一级">
+                                                            <TextBlock Text="上一级" Classes="mode-label"
+                                                                Foreground="{Binding ExportNoticeTarget, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:ExportNoticeTarget.ParentFolder}}"/>
+                                                        </Button>
+                                                    </controls:SegmentPanel>
+                                                </controls:AnimatedSegmentTrack>
                                             </Grid>
                                         </StackPanel>
                                     </controls:ContinuousBorder>
+                                </StackPanel>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowAutomationCard}">
+                                    <TextBlock Classes="settings-group-label" Text="外部调用"/>
+                                    <Button Classes="settings-entry" Click="OnOpenExportCommandClick"
+                                        AutomationProperties.Name="打开导出指令窗口"
+                                        AutomationProperties.HelpText="生成用于 Quicker 或 Windows 运行的导出指令">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{StaticResource Space.Md}">
+                                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="导出指令" Classes="setting-label" FontWeight="SemiBold"/>
+                                                <TextBlock Text="在 Quicker 或 Windows「运行」中触发导出" Classes="settings-caption"
+                                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </StackPanel>
+                                            <Path Grid.Column="1" Width="7" Height="12" Stretch="Uniform" VerticalAlignment="Center"
+                                                Data="M1 1L6 6L1 11" Stroke="{DynamicResource Brush.TextSecondary}"
+                                                StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round" IsHitTestVisible="False"/>
+                                        </Grid>
+                                    </Button>
                                 </StackPanel>
                                 <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowUpdateCard}">
                                     <TextBlock Classes="settings-group-label" Text="更新"/>

@@ -239,13 +239,24 @@ public sealed class ExportService : IExportService
     {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(s.ExportPath);
+        if (args.ContainsKey("SLICE_MODE"))
+        {
+            // UXP Folder.getEntries can fail even when getEntryWithUrl resolved the destination.
+            // Only names that can collide with this format are needed for automatic suffixes.
+            var extension = "." + s.Format.ToExtension();
+            args["EXISTING_EXPORT_NAMES"] = s.AutoRename
+                ? System.Text.Json.JsonSerializer.Serialize(Directory.EnumerateFileSystemEntries(s.ExportPath)
+                    .Where(path => string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase))
+                    .Select(Path.GetFileName))
+                : "[]";
+        }
         var taskDirectory = Path.Combine(Path.GetTempPath(), "PSexp", "tasks", taskId);
         Directory.CreateDirectory(taskDirectory);
         args["EXPORT_FOLDER_URL"] = ScriptParameterInjector.EscapeJsString(ToUxpFolderUrl(s.ExportPath));
         args["RESULT_FOLDER_URL"] = ScriptParameterInjector.EscapeJsString(ToUxpFolderUrl(taskDirectory));
         var script = ScriptParameterInjector.Inject(template, args);
         _logger.Info($"[task={taskId}] 输出目录={s.ExportPath} exists={Directory.Exists(s.ExportPath)}；回执目录={taskDirectory}");
-        _logger.Debug($"[task={taskId}] 注入参数={System.Text.Json.JsonSerializer.Serialize(args.Where(pair => pair.Key != "SCRIPT_BODY").ToDictionary(pair => pair.Key, pair => pair.Value))}；脚本SHA256={Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(script)))}");
+        _logger.Debug($"[task={taskId}] 注入参数={System.Text.Json.JsonSerializer.Serialize(args.Where(pair => pair.Key is not ("SCRIPT_BODY" or "EXISTING_EXPORT_NAMES")).ToDictionary(pair => pair.Key, pair => pair.Value))}；脚本SHA256={Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(script)))}");
         var backgroundSnapshot = args.GetValueOrDefault("WAIT_FOR_BACKGROUND_EXPORT") == "true"
             ? ExportFileWatcher.CaptureSnapshot(s.ExportPath, s.Format.ToExtension()) : null;
         var dispatched = await _uxpBridge.ExecuteAsync(script, ct);

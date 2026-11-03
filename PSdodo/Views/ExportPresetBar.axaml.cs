@@ -44,13 +44,13 @@ public partial class ExportPresetBar : UserControl
     private async void OnCopyExportCommandClick(object? sender, RoutedEventArgs args)
     {
         if (_model is not { CurrentPresetCommandId: { } id } model
-            || Environment.ProcessPath is not { } executable
+            || MainViewModel.BuildExportCommand(ExportInvocation.ForPresetId(id)) is not { } command
             || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
 
         PresetMore.Flyout?.Hide();
         try
         {
-            await clipboard.SetTextAsync(ExportInvocation.BuildPowerShellCommand(executable, id));
+            await clipboard.SetTextAsync(command);
             model.PresetStatusMessage = "已复制导出指令";
         }
         catch (Exception)

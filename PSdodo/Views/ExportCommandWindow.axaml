@@ -1,0 +1,209 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:PsExporter.Controls"
+        xmlns:auto="using:PsExporter.Core.Automation"
+        xmlns:models="using:PsExporter.Models"
+        xmlns:vm="using:PsExporter.ViewModels"
+        xmlns:chrome="clr-namespace:Avalonia.Controls.Chrome;assembly=Avalonia.Controls"
+        x:Class="PsExporter.Views.ExportCommandWindow"
+        Title="导出指令 · PSexp" Icon="/Assets/ico.ico"
+        Width="{x:Static models:AppSettings.MinimumWindowWidth}" Height="{x:Static models:AppSettings.MinimumCommandWindowHeight}"
+        MinWidth="{x:Static models:AppSettings.MinimumWindowWidth}" MinHeight="{x:Static models:AppSettings.MinimumCommandWindowHeight}"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False" Focusable="True" Background="Transparent" TransparencyLevelHint="Transparent"
+        WindowDecorations="None" ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="-1">
+    <Window.Styles>
+        <Style Selector="Button.seg">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button, SelectableTextBlock">
+            <Setter Property="FocusAdorner">
+                <Template>
+                    <controls:ContinuousBorder Margin="1" CornerRadius="{StaticResource Radius.SegmentInner}"
+                        BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="2" IsHitTestVisible="False"/>
+                </Template>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.command-error">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Styles>
+    <controls:ContinuousBorder Margin="{StaticResource Window.ShadowMargin}" BoxShadow="{StaticResource Shadow.OwnedWindow}"
+        Background="{DynamicResource Brush.Canvas}" CornerRadius="{StaticResource Radius.Lg}">
+        <Grid RowDefinitions="Auto,*,Auto">
+
+            <!-- 标题栏：标题、指令参考、关闭。参考只在点开时出现，不占常驻高度。 -->
+            <controls:ContinuousBorder Background="{DynamicResource Brush.Surface}" Height="{StaticResource Control.CaptionHeight}"
+                chrome:WindowDecorationProperties.ElementRole="TitleBar">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <TextBlock Text="导出指令" Classes="subtitle" FontWeight="SemiBold" Margin="16,0" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" x:Name="HelpButton" Classes="tool" Margin="0,0,8,0" VerticalAlignment="Center"
+                        chrome:WindowDecorationProperties.ElementRole="User"
+                        ToolTip.Tip="查看指令写法与失效条件" AutomationProperties.Name="查看指令参考">
+                        <Viewbox Width="14" Height="14">
+                            <Canvas Width="16" Height="16">
+                                <Path Data="M8,1 A7,7 0 1 1 8,15 A7,7 0 1 1 8,1 M6,6 A2,2 0 1 1 9,7.7 L8,8.5 L8,10"
+                                    Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.25"/>
+                                <Ellipse Width="1.4" Height="1.4" Canvas.Left="7.3" Canvas.Top="11.3" Fill="{Binding $parent[Button].Foreground}"/>
+                            </Canvas>
+                        </Viewbox>
+                        <Button.Flyout>
+                            <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False"
+                                Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource CardFlyoutTheme}">
+                                <StackPanel x:Name="HelpContent" Spacing="10" MaxWidth="280" Cursor="Arrow">
+                                    <StackPanel.Styles>
+                                        <Style Selector="SelectableTextBlock">
+                                            <Setter Property="Cursor" Value="Ibeam"/>
+                                            <Setter Property="Focusable" Value="True"/>
+                                            <Setter Property="SelectionBrush" Value="{DynamicResource Brush.SegmentSelected}"/>
+                                        </Style>
+                                    </StackPanel.Styles>
+                                    <TextBlock Text="指令参考" FontWeight="SemiBold"/>
+                                    <ItemsControl x:Name="CommandForms">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="auto:ExportCommandForm">
+                                                <StackPanel Spacing="2">
+                                                    <SelectableTextBlock Text="{Binding Syntax}" TextWrapping="Wrap"
+                                                        FontFamily="Consolas, Microsoft YaHei UI"/>
+                                                    <TextBlock Text="{Binding Description}" Classes="setting-description"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Classes="setting-description" Text="整行可粘贴到 Windows「运行」。Quicker 分栏填写时，程序路径和后面的参数分别填入。"/>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Grid.Column="2" Classes="tool caption close" Click="OnCloseClick"
+                        chrome:WindowDecorationProperties.ElementRole="CloseButton"
+                        ToolTip.Tip="关闭" AutomationProperties.Name="关闭导出指令窗口">
+                        <Path Classes="caption-glyph" Data="M0 0L12 12 M12 0L0 12" Width="12" Height="12" Stretch="Fill"
+                            StrokeThickness="1.3" Stroke="{Binding $parent[Button].Foreground}"/>
+                    </Button>
+                    <Border Grid.ColumnSpan="3" Height="1" VerticalAlignment="Bottom"
+                        Background="{DynamicResource Brush.Divider}" IsHitTestVisible="False"/>
+                </Grid>
+            </controls:ContinuousBorder>
+
+            <!-- 选择区：本窗口唯一的滚动区。 -->
+            <ScrollViewer Grid.Row="1" Classes="subtle-scroll" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="16" Spacing="{StaticResource Space.Lg}">
+                    <controls:SegmentOptionRow Spacing="12">
+                        <TextBlock Text="来源" Classes="label"/>
+                        <controls:AnimatedSegmentTrack x:Name="SourceTrack" Classes="choice-track">
+                            <controls:SegmentPanel>
+                                <Button Classes="seg" Content="指定预设" CommandParameter="preset" Click="OnSourceClick" AutomationProperties.Name="按指定预设导出"/>
+                                <Button Classes="seg" Content="当前界面" CommandParameter="current" Click="OnSourceClick" AutomationProperties.Name="按主界面当前参数导出"/>
+                            </controls:SegmentPanel>
+                        </controls:AnimatedSegmentTrack>
+                    </controls:SegmentOptionRow>
+
+                    <StackPanel x:Name="PresetFields" Spacing="{StaticResource Space.Lg}">
+                        <controls:SegmentOptionRow Spacing="12">
+                            <TextBlock Text="板块" Classes="label"/>
+                            <controls:AnimatedSegmentTrack x:Name="CategoryTrack" Classes="choice-track">
+                                <controls:SegmentPanel>
+                                    <Button Classes="seg" Content="快导" CommandParameter="Quick" Click="OnCategoryClick" AutomationProperties.Name="快导板块"/>
+                                    <Button Classes="seg" Content="画板" CommandParameter="Artboards" Click="OnCategoryClick" AutomationProperties.Name="画板板块"/>
+                                    <Button Classes="seg" Content="图层" CommandParameter="Layers" Click="OnCategoryClick" AutomationProperties.Name="图层板块"/>
+                                    <Button Classes="seg" Content="切片" CommandParameter="Slices" Click="OnCategoryClick" AutomationProperties.Name="切片板块"/>
+                                </controls:SegmentPanel>
+                            </controls:AnimatedSegmentTrack>
+                        </controls:SegmentOptionRow>
+
+                        <controls:SegmentOptionRow Spacing="12">
+                            <TextBlock Text="预设" Classes="label"/>
+                            <Button x:Name="PresetPicker" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                AutomationProperties.Name="选择导出预设">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock x:Name="PresetName" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <Path Grid.Column="1" Data="M0 0L4 4L8 0" Width="8" Height="4" Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.4" VerticalAlignment="Center"/>
+                                </Grid>
+                                <Button.Flyout>
+                                    <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" HorizontalOffset="-8"
+                                        Placement="BottomEdgeAlignedLeft" FlyoutPresenterTheme="{StaticResource MenuFlyoutTheme}">
+                                        <ScrollViewer Classes="subtle-scroll" MaxHeight="224" HorizontalScrollBarVisibility="Disabled"
+                                            VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl x:Name="PresetChoices" MaxWidth="300" MinWidth="200">
+                                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="2"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:ExportPresetListItem">
+                                                        <Button Classes="preset-choice" Classes.selected="{Binding IsSelected}"
+                                                            Click="OnPresetClick" ToolTip.Tip="{Binding Hint}" AutomationProperties.Name="{Binding Name}">
+                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                                <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontSize.Body}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding FormatSummary}" VerticalAlignment="Center"
+                                                                    FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                            </Grid>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+                        </controls:SegmentOptionRow>
+
+                        <!-- 预设里存着的参数，全部由代码从这份预设算出；完整读数（含命名）在悬停提示里。 -->
+                        <controls:SegmentOptionRow Spacing="12" IsVisible="{Binding #SummaryStrip.IsVisible}">
+                            <TextBlock Text="摘要" Classes="label"/>
+                            <WrapPanel x:Name="SummaryStrip" ItemSpacing="{StaticResource Space.Xs}" LineSpacing="{StaticResource Space.Xs}">
+                                <controls:ContinuousBorder x:Name="FormatBadge" Classes="meta-badge"
+                                    Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                                    <TextBlock Classes="micro meta-label" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                </controls:ContinuousBorder>
+                                <controls:ContinuousBorder x:Name="ScopeBadge" Classes="meta-badge"
+                                    Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                                    <TextBlock Classes="micro meta-label" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                </controls:ContinuousBorder>
+                                <controls:ContinuousBorder x:Name="DestinationBadge" Classes="meta-badge"
+                                    Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                                    <TextBlock Classes="micro meta-label" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                </controls:ContinuousBorder>
+                            </WrapPanel>
+                        </controls:SegmentOptionRow>
+                    </StackPanel>
+
+                    <TextBlock x:Name="SourceNote" Classes="setting-description"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- 命令区：钉住，永不滚走。 -->
+            <Border Grid.Row="2" Background="{DynamicResource Brush.Surface}" Padding="{StaticResource Padding.Header}"
+                BorderBrush="{DynamicResource Brush.Divider}" BorderThickness="0,1,0,0">
+                <StackPanel Spacing="{StaticResource Space.Sm}">
+                    <controls:ContinuousBorder Background="{DynamicResource Brush.SurfaceSubtle}" BorderBrush="{DynamicResource Brush.Border}"
+                        BorderThickness="1" CornerRadius="{StaticResource Radius.Sm}" Padding="12,10">
+                        <Panel>
+                            <ScrollViewer x:Name="CommandViewport" Classes="subtle-scroll" MaxHeight="112"
+                                HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                <SelectableTextBlock x:Name="CommandPreview" TextWrapping="Wrap" Cursor="IBeam" Focusable="True"
+                                    Foreground="{DynamicResource Brush.TextPrimary}" SelectionBrush="{DynamicResource Brush.SegmentSelected}"
+                                    FontFamily="Consolas, Microsoft YaHei UI" AutomationProperties.Name="导出指令预览"/>
+                            </ScrollViewer>
+                            <TextBlock x:Name="CommandPlaceholder" Classes="setting-description" Text="选择有效预设后生成指令。"/>
+                        </Panel>
+                    </controls:ContinuousBorder>
+                    <TextBlock x:Name="ExePath" Classes="micro" TextTrimming="CharacterEllipsis"/>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBlock x:Name="CopyStatus" Classes="setting-description"
+                            VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Name="RunOnce" Classes="secondary" Content="试运行" Click="OnRunOnceClick" VerticalAlignment="Center"
+                                ToolTip.Tip="立即导出一次，文件会写入当前指令指定的目录" AutomationProperties.Name="试运行这条指令"/>
+                            <Button x:Name="CopyCommand" Classes="primary" Content="复制" Click="OnCopyCommandClick" VerticalAlignment="Center"
+                                ToolTip.Tip="复制整条指令，也可以用 Ctrl+C" AutomationProperties.Name="复制导出指令"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <controls:ContinuousBorder Grid.RowSpan="3" IsHitTestVisible="False"
+                CornerRadius="{StaticResource Radius.Lg}" BorderBrush="{DynamicResource Brush.OwnedWindowBorder}"
+                BorderThickness="{StaticResource Thickness.Thin}"/>
+        </Grid>
+    </controls:ContinuousBorder>
+</Window>

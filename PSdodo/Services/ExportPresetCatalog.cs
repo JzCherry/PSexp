@@ -32,6 +32,62 @@ public static class ExportPresetCatalog
         ExportPresetCategory.Slices => "切片导出",
         _ => "快速导出"
     };
+
+    /// <summary>命令行里写板块用的标识。板块与英文标识的对应只在这里有一份。</summary>
+    public static string CategoryToken(ExportPresetCategory category) => category switch
+    {
+        ExportPresetCategory.Quick => "quick",
+        ExportPresetCategory.Artboards => "artboards",
+        ExportPresetCategory.Layers => "layers",
+        _ => "slices"
+    };
+
+    public static bool TryParseCategoryToken(string? token, out ExportPresetCategory category)
+    {
+        foreach (var value in Enum.GetValues<ExportPresetCategory>())
+        {
+            if (string.Equals(CategoryToken(value), token, StringComparison.OrdinalIgnoreCase))
+            {
+                category = value;
+                return true;
+            }
+        }
+        category = default;
+        return false;
+    }
+
+    /// <summary>给指令说明用的板块列举；中文叫法由界面上的分段按钮自己承担，这里不重复。</summary>
+    public static string CategoryTokenList()
+        => string.Join(" / ", Enum.GetValues<ExportPresetCategory>().Select(CategoryToken));
+
+    /// <summary>图片规格读数。预设下拉与导出指令窗口共用，避免同一份参数出现两种写法。</summary>
+    public static string DescribeFormat(ExportPresetParameters p)
+        => p.Format == ExportFormat.Png ? "PNG" : $"JPG · {p.Quality}%";
+
+    /// <summary>导出对象读数；快速导出与切片没有对象选择，返回空串表示这一项不显示。</summary>
+    public static string DescribeScope(ExportPresetCategory category, ExportPresetParameters p) => category switch
+    {
+        ExportPresetCategory.Artboards => p.Mode == ExportMode.SelectedArtboards ? "选中画板" : "全部画板",
+        ExportPresetCategory.Layers => (p.LayerRecursive ? "图层素材" : "画布合成")
+            + (p.LayerScopeSelectedOnly == true ? " · 选中" : " · 全部"),
+        _ => ""
+    };
+
+    /// <summary>输出位置短标签；自定义时完整路径另行放进悬停提示，不进读数。</summary>
+    public static string DescribeDestination(ExportPresetParameters p) => p.Destination switch
+    {
+        ExportDestination.Desktop => "桌面",
+        ExportDestination.Custom => "自定义",
+        _ => "文档位置"
+    };
+
+    /// <summary>命名读数；留空时返回空串，因为留空的含义随板块不同，不在这里替它承诺结果。</summary>
+    public static string DescribeNaming(ExportPresetCategory category, ExportPresetParameters p) => category switch
+    {
+        ExportPresetCategory.Quick when !string.IsNullOrWhiteSpace(p.ImageName) => "图片名 " + p.ImageName,
+        ExportPresetCategory.Quick => "",
+        _ => string.IsNullOrWhiteSpace(p.FilePrefix) ? "" : "前缀 " + p.FilePrefix
+    };
     public static ExportPreset BuiltIn(ExportPresetCategory category) => new()
     {
         Id = "default:" + category, Name = "默认预设", Category = category,

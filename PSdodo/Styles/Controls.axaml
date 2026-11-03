@@ -493,6 +493,28 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.SegmentSelectedBorder}"/>
     </Style>
 
+    <!-- 预设下拉里的行：导出页与导出指令窗口共用同一份形态。 -->
+    <Style Selector="Button.preset-choice">
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="MaxHeight" Value="32"/>
+    </Style>
+    <Style Selector="Button.preset-choice:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
+        <Setter Property="Background" Value="{DynamicResource Brush.SegmentHover}"/>
+    </Style>
+    <Style Selector="Button.preset-choice.selected">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+    <Style Selector="Button.preset-choice.selected /template/ ContentPresenter#PART_ContinuousPresenter">
+        <Setter Property="Background" Value="{DynamicResource Brush.SegmentSelected}"/>
+    </Style>
+
     <Style Selector="TextBlock.meta-label">
         <Setter Property="FontSize" Value="{StaticResource FontSize.Micro}"/>
         <Setter Property="Height" Value="16"/>
@@ -524,6 +546,23 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{StaticResource Radius.SettingsCard}"/>
         <Setter Property="Padding" Value="14"/>
+    </Style>
+    <Style Selector="Button.settings-entry">
+        <Setter Property="Height" Value="NaN"/>
+        <Setter Property="MinHeight" Value="64"/>
+        <Setter Property="MaxHeight" Value="Infinity"/>
+        <Setter Property="Padding" Value="{StaticResource Padding.Panel}"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.SettingsCard}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.SettingsCard}"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="FocusAdorner">
+            <Template>
+                <controls:ContinuousBorder Margin="1" CornerRadius="{StaticResource Radius.SettingsCard}"
+                    BorderBrush="{DynamicResource Brush.Accent}" BorderThickness="2" IsHitTestVisible="False"/>
+            </Template>
+        </Setter>
     </Style>
     <Style Selector="controls|ContinuousBorder.settings-section controls|AnimatedSegmentTrack.choice-track">
         <Setter Property="Background" Value="{DynamicResource Brush.SettingsTrack}"/>

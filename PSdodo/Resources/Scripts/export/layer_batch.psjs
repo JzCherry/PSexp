@@ -10,6 +10,7 @@ const resultFolderUrl = "{{RESULT_FOLDER_URL}}";
 const format = "{{FORMAT}}".toLowerCase();
 const quality = {{QUALITY}};
 const rename = {{RENAME}};
+const existingNames = new Set({{EXISTING_EXPORT_NAMES}}.map(name => name.toLowerCase()));
 const imageName = "{{IMAGE_NAME}}";
 
 const withDocName = {{WITH_DOC_NAME}};
@@ -111,8 +112,6 @@ async function exportBatch(executionContext) {
     stage = "读取导出目录";
     activePath = exportFolderUrl;
     const folder = await fs.getEntryWithUrl(exportFolderUrl);
-    stage = "枚举导出目录";
-    const existingNames = new Set((await folder.getEntries()).map(entry => entry.name.toLowerCase()));
     const docName = safeName(doc.name.replace(/\.[^.]+$/, ""));
     const prefix = imageName ? safeName(imageName) : (withDocName ? docName : "");
 

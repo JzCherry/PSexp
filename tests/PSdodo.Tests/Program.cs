@@ -1,10 +1,12 @@
 using PsExporter;
+using PsExporter.Core.Automation;
 using PsExporter.Core.PsConnection;
 using PsExporter.Core.Scripting;
 using PsExporter.Models;
 using PsExporter.Services;
 using PsExporter.ViewModels;
 using PsExporter.Views;
+using System.Runtime.InteropServices;
 
 var failures = new List<string>();
 
@@ -18,6 +20,28 @@ Run("Export settings reject relative paths", () =>
 {
     var settings = new ExportSettings { ExportPath = "relative-output" };
     True(!ExportSettingsValidator.TryPrepare(settings, out _));
+});
+
+Run("Windows export commands round-trip", () =>
+{
+    const string executable = @"C:\方向 2 台机\PS exp\PSexp v3.0.6.exe";
+    Equal(Enum.GetValues<ExportInvocationKind>().Length, ExportInvocation.Forms.Count);
+    Equal($"\"{executable}\" --preset-id 08a489ffd20b4accb4bcb4604fe304f9",
+        ExportInvocation.BuildWindowsCommandLine(executable, ExportInvocation.ForPresetId("08a489ffd20b4accb4bcb4604fe304f9")));
+    if (!OperatingSystem.IsWindows()) return;
+
+    foreach (var form in ExportInvocation.Forms)
+        CheckRoundTrip(SampleInvocation(form.Kind));
+    CheckRoundTrip(ExportInvocation.ForPresetName(ExportPresetCategory.Layers, "Bob's \"图层\" \\\" #2\\"));
+
+    void CheckRoundTrip(ExportInvocation sample)
+    {
+        var command = ExportInvocation.BuildWindowsCommandLine(executable, sample);
+        var tokens = SplitWindowsCommandLine(command);
+        Equal(executable, tokens[0]);
+        var accepted = ExportInvocation.TryParse(tokens[1..], out var parsed);
+        True(accepted && parsed == sample, $"Windows 解析后的参数未能还原指令：{command}");
+    }
 });
 
 var tempRoot = Path.Combine(Path.GetTempPath(), $"ps-exporter-tests-{Guid.NewGuid():N}");
@@ -536,6 +560,7 @@ try
             ["FORMAT"] = "jpg",
             ["QUALITY"] = "80",
             ["RENAME"] = "true",
+            ["EXISTING_EXPORT_NAMES"] = "[\"已有.jpg\"]",
             ["IMAGE_NAME"] = "demo",
             ["WITH_DOC_NAME"] = "false",
             ["SHOW_HINT"] = "true"
@@ -546,6 +571,9 @@ try
         True(injected.Contains("const format = \"jpg\".toLowerCase();"));
         True(injected.Contains("const quality = 80;"));
         True(injected.Contains("const imageName = \"demo\";"));
+        True(injected.Contains("new Set([\"已有.jpg\"].map("));
+        True(!injected.Contains("folder.getEntries()"));
+        True(!ScriptLibrary.GetScript(ScriptNames.ExportSlices).Contains("folder.getEntries()"));
     });
 
     Run("Layer script exports only top-level layers and restores visibility", () =>
@@ -992,6 +1020,34 @@ static PsBridgeResult SuccessResult(string path) => new()
     ExportedCount = 1,
     OutputFiles = [path]
 };
+
+static ExportInvocation SampleInvocation(ExportInvocationKind kind) => kind switch
+{
+    ExportInvocationKind.CurrentInterface => new(),
+    ExportInvocationKind.PresetById => ExportInvocation.ForPresetId("3f7c2a91b8f4a6"),
+    ExportInvocationKind.PresetByName => ExportInvocation.ForPresetName(ExportPresetCategory.Artboards, "秋天的画板"),
+    _ => throw new InvalidDataException("指令清单里有形态没有样例：" + kind)
+};
+
+static string[] SplitWindowsCommandLine(string command)
+{
+    var argv = CommandLineToArgvW(command, out var count);
+    if (argv == IntPtr.Zero) throw new InvalidOperationException("CommandLineToArgvW failed.");
+    try
+    {
+        var tokens = new string[count];
+        for (var index = 0; index < count; index++)
+            tokens[index] = Marshal.PtrToStringUni(Marshal.ReadIntPtr(argv, index * IntPtr.Size))!;
+        return tokens;
+    }
+    finally { _ = LocalFree(argv); }
+}
+
+[DllImport("shell32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+static extern IntPtr CommandLineToArgvW(string command, out int count);
+
+[DllImport("kernel32.dll", ExactSpelling = true)]
+static extern IntPtr LocalFree(IntPtr memory);
 
 void Run(string name, Action test)
 {

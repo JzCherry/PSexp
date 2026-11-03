@@ -4,40 +4,7 @@
              xmlns:vm="using:PsExporter.ViewModels"
              x:Class="PsExporter.Views.ExportPresetBar"
              x:DataType="vm:MainViewModel" x:Name="PresetRoot">
-    <UserControl.Resources>
-        <ControlTheme x:Key="PresetFlyoutTheme" TargetType="FlyoutPresenter">
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <controls:ContinuousBorder Margin="8" Padding="4"
-                        Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
-                        CornerRadius="{StaticResource Radius.Sm}" BoxShadow="{StaticResource Shadow.Menu}">
-                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                    </controls:ContinuousBorder>
-                </ControlTemplate>
-            </Setter>
-        </ControlTheme>
-    </UserControl.Resources>
     <UserControl.Styles>
-        <Style Selector="Button.preset-choice">
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="8,0"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="MaxHeight" Value="32"/>
-        </Style>
-        <Style Selector="Button.preset-choice:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
-            <Setter Property="Background" Value="{DynamicResource Brush.SegmentHover}"/>
-        </Style>
-        <Style Selector="Button.preset-choice.selected">
-            <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
-            <Setter Property="FontWeight" Value="Medium"/>
-        </Style>
-        <Style Selector="Button.preset-choice.selected /template/ ContentPresenter#PART_ContinuousPresenter">
-            <Setter Property="Background" Value="{DynamicResource Brush.SegmentSelected}"/>
-        </Style>
         <Style Selector="Button.preset-action">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -60,7 +27,7 @@
                         <Path Grid.Column="2" Data="M0 0L4 4L8 0" Width="8" Height="4" Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.4" VerticalAlignment="Center"/>
                     </Grid>
                     <Button.Flyout>
-                        <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedLeft" FlyoutPresenterTheme="{StaticResource PresetFlyoutTheme}">
+                        <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedLeft" FlyoutPresenterTheme="{StaticResource MenuFlyoutTheme}">
                             <ScrollViewer MaxHeight="224" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Classes="subtle-scroll">
                                 <ItemsControl ItemsSource="{Binding AvailablePresets}" Width="{Binding #PresetPicker.Bounds.Width}" MaxWidth="300" MinWidth="200">
                                     <ItemsControl.ItemsPanel>
@@ -97,7 +64,7 @@
                     <Path Data="M1 4A1 1 0 1 0 3 4A1 1 0 1 0 1 4 M7 4A1 1 0 1 0 9 4A1 1 0 1 0 7 4 M13 4A1 1 0 1 0 15 4A1 1 0 1 0 13 4"
                         Fill="{DynamicResource Brush.TextSecondary}" Width="16" Height="8"/>
                     <Button.Flyout>
-                        <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource PresetFlyoutTheme}">
+                        <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource MenuFlyoutTheme}">
                             <StackPanel Width="176" Spacing="2">
                                 <Button Classes="preset-action" Content="复制导出指令" Click="OnCopyExportCommandClick"/>
                                 <Button Classes="preset-action" Content="复制为新预设" Command="{Binding CopyPresetCommand}" Click="OnMenuActionClick"/>

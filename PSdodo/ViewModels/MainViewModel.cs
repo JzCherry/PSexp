@@ -76,6 +76,13 @@ public partial class MainViewModel : ViewModelBase
         AutoCheckForUpdates = s.AutoCheckForUpdates;
         AutoDownloadUpdates = s.AutoDownloadUpdates;
         CloseToTray = s.CloseToTray;
+        _showExportNotice = s.ShowExportNotice;
+        _exportTempDocumentsToDesktop = s.ExportTempDocumentsToDesktop;
+        _exportNoticeDurationSeconds = IsExportNoticeDuration(s.ExportNoticeDurationSeconds)
+            ? s.ExportNoticeDurationSeconds
+            : AppSettings.DefaultExportNoticeDurationSeconds;
+        if (!_showExportNotice) RefreshSettingsSearch();
+        _exportNoticeTarget = Enum.IsDefined(s.ExportNoticeTarget) ? s.ExportNoticeTarget : ExportNoticeTarget.OutputFolder;
         DockRetractDelayMs = s.DockRetractDelayMs is 250 or 420 or 800 ? s.DockRetractDelayMs : 420;
         IsAlwaysOnTop = s.StartAlwaysOnTop;
         AutoRefreshOnActivated = s.AutoRefreshOnActivated;
@@ -84,6 +91,7 @@ public partial class MainViewModel : ViewModelBase
         _windowPlacement = s.WindowPlacement;
         _windowWidth = s.WindowWidth;
         _windowHeight = s.WindowHeight;
+        LoadExportCommandMemory(s);
         App.ApplyTheme(ThemeMode);
         _settingsInitialized = true;
 
@@ -717,7 +725,7 @@ public partial class MainViewModel : ViewModelBase
     private AppSettings CreateAppSettings()
     {
         var current = _settings.Current;
-        return new AppSettings
+        return ExportCommandMemorySnapshot(new AppSettings
         {
             DefaultExportPath = ExportPath,
             DefaultDestination = Destination,
@@ -749,11 +757,15 @@ public partial class MainViewModel : ViewModelBase
             AutoCheckForUpdates = AutoCheckForUpdates,
             AutoDownloadUpdates = AutoDownloadUpdates,
             CloseToTray = CloseToTray,
+            ShowExportNotice = ShowExportNotice,
+            ExportTempDocumentsToDesktop = ExportTempDocumentsToDesktop,
+            ExportNoticeDurationSeconds = ExportNoticeDurationSeconds,
+            ExportNoticeTarget = ExportNoticeTarget,
             DockRetractDelayMs = DockRetractDelayMs,
             WindowPlacement = _windowPlacement,
             WindowWidth = _windowWidth,
             WindowHeight = _windowHeight
-        };
+        });
     }
 
     public (double Width, double Height) GetSavedWindowSize() => (_windowWidth, _windowHeight);
@@ -965,6 +977,8 @@ public partial class MainViewModel : ViewModelBase
                 ExportStatusText = $"{title} 完成 · 共 {ExportedCount} 个文件"
                     + (string.IsNullOrWhiteSpace(exportWarning) ? "" : "；" + exportWarning);
                 AppendLog("Info", $"✔ {title} 完成");
+                if (ShowExportNotice && CanOpenExportFolder && ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
+                    ExportCompleted?.Invoke(_lastSuccessfulExportDirectory, ExportedCount);
             }
             else
             {
@@ -1156,32 +1170,32 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void OpenExportFolder()
+        => TryOpenExportDirectory(string.IsNullOrWhiteSpace(_lastSuccessfulExportDirectory)
+            ? ResolvedExportPath
+            : _lastSuccessfulExportDirectory);
+
+    internal bool TryOpenExportDirectory(string directory)
     {
         try
         {
-            var path = Path.GetFullPath(
-                string.IsNullOrWhiteSpace(_lastSuccessfulExportDirectory)
-                    ? ResolvedExportPath
-                    : _lastSuccessfulExportDirectory);
+            var path = Path.GetFullPath(directory);
             if (!Directory.Exists(path))
             {
-                CanOpenExportFolder = false;
+                if (string.Equals(path, _lastSuccessfulExportDirectory, StringComparison.OrdinalIgnoreCase))
+                    CanOpenExportFolder = false;
                 ExportStatusText = "导出目录不存在";
                 AppendLog("Warn", $"导出目录不存在: {path}");
-                return;
+                return false;
             }
 
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"\"{path}\"",
-                UseShellExecute = true
-            });
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            return true;
         }
         catch (Exception ex)
         {
             ExportStatusText = "无法打开导出目录";
             AppendLog("Error", $"打开导出目录失败: {ex.Message}");
+            return false;
         }
     }
 

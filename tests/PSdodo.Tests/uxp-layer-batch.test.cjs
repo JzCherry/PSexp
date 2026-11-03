@@ -19,8 +19,7 @@ async function run(options = {}) {
     const saves = [], reports = [], alerts = [];
     const folder = {
         async getEntries() {
-            if (options.missingDirectory) throw new Error("no such file or directory");
-            return [...entries].map(name => ({ name }));
+            throw new Error("no such file or directory");
         },
         async createFile(name, { overwrite }) {
             if (!overwrite && entries.has(name)) throw new Error("file exists");
@@ -51,12 +50,14 @@ async function run(options = {}) {
                 }
             }; } };
             assert.equal(url, "file:/output");
+            if (options.missingDirectory) throw new Error("no such file or directory");
             return folder;
         }
     } };
     const args = {
         RECURSIVE: String(!!options.recursive), SELECTED_ONLY: "false", EXPORT_FOLDER_URL: "file:/output", RESULT_FOLDER_URL: "file:/task",
         FORMAT: options.format || "png", QUALITY: String(options.quality || 80), RENAME: String(options.rename !== false),
+        EXISTING_EXPORT_NAMES: JSON.stringify(options.rename === false ? [] : [...entries]),
         IMAGE_NAME: options.imageName || "", FILE_NAME: "export", WITH_DOC_NAME: "true", SHOW_HINT: String(!!options.hint)
     };
     const script = template.replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => args[key]);
@@ -116,7 +117,7 @@ async function run(options = {}) {
             const { result, saves } = await run({ missingDirectory: true });
             assert.equal(result.success, false);
             assert.equal(saves.length, 0);
-            assert.match(result.error, /枚举导出目录/);
+            assert.match(result.error, /读取导出目录/);
             assert.match(result.error, /file:\/output/);
             assert.match(result.error, /no such file or directory/);
         },

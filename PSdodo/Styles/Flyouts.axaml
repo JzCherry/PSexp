@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:PsExporter.Controls">
+    <!-- 弹层外壳只有这两枚：Card 装说明文字，Menu 装选项列表。定义放在应用级，任何窗口都取得到。 -->
+    <ControlTheme x:Key="CardFlyoutTheme" TargetType="FlyoutPresenter">
+        <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:ContinuousBorder Margin="8" Padding="14"
+                    Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                    CornerRadius="{StaticResource Radius.Md}" BoxShadow="{StaticResource Shadow.Menu}">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                </controls:ContinuousBorder>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="MenuFlyoutTheme" TargetType="FlyoutPresenter">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:ContinuousBorder Margin="8" Padding="4"
+                    Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                    CornerRadius="{StaticResource Radius.Sm}" BoxShadow="{StaticResource Shadow.Menu}">
+                    <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                </controls:ContinuousBorder>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>

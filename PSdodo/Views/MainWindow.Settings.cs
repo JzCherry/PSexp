@@ -1,10 +1,9 @@
 using System;
 using System.Diagnostics;
+using Avalonia;
 using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Input.Platform;
-using PsExporter.Core.Automation;
 using PsExporter.ViewModels;
 
 namespace PsExporter.Views;
@@ -14,6 +13,7 @@ public partial class MainWindow
     private readonly DispatcherTimer _settingsPageFadeTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly Stopwatch _settingsPageFadeClock = new();
     private double _settingsPageFadeStart;
+    private ExportCommandWindow? _exportCommandWindow;
 
     private void OnSettingsNavigationRequested(bool updates)
     {
@@ -34,28 +34,45 @@ public partial class MainWindow
         }, DispatcherPriority.Loaded);
     }
 
-    private async void OnCopyAutomationCommandClick(object? sender, RoutedEventArgs args)
+    private void OnOpenExportCommandClick(object? sender, RoutedEventArgs args)
     {
-        if (sender is not Button { Content: "复制指令" } button || DataContext is not MainViewModel model
-            || Environment.ProcessPath is not { } executable || Clipboard is not { } clipboard) return;
-
-        var isPreset = button.CommandParameter is "preset";
-        var presetId = isPreset ? model.CurrentPresetCommandId : null;
-        if (isPreset && presetId is null) return;
-
-        button.Content = "复制中…";
-        try
+        if (_exportCommandWindow is { } openWindow)
         {
-            await clipboard.SetTextAsync(ExportInvocation.BuildPowerShellCommand(executable, presetId));
-            button.Content = "已复制";
-        }
-        catch (Exception)
-        {
-            button.Content = "复制失败";
+            if (openWindow.WindowState == WindowState.Minimized)
+                openWindow.WindowState = WindowState.Normal;
+            openWindow.SyncFromMainInterface();
+            openWindow.Activate();
+            return;
         }
 
-        await Task.Delay(1400);
-        button.Content = "复制指令";
+        if (DataContext is not MainViewModel model) return;
+        var window = new ExportCommandWindow { DataContext = model };
+        PlaceExportCommandWindow(window);
+        window.Closed += (_, _) => _exportCommandWindow = null;
+        _exportCommandWindow = window;
+        window.Show(this);
+    }
+
+    private void PlaceExportCommandWindow(ExportCommandWindow window)
+    {
+        if ((Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen) return;
+        var area = screen.WorkingArea;
+        var scale = screen.Scaling;
+        var width = (int)Math.Ceiling(window.Width * scale);
+        var height = (int)Math.Ceiling(window.Height * scale);
+        var ownerWidth = (int)Math.Ceiling(Bounds.Width * scale);
+        var right = Position.X + ownerWidth;
+        var left = Position.X - width;
+        var offset = (int)Math.Round(24 * scale);
+        var x = right + width <= area.Right ? right
+            : left >= area.X ? left
+            : Position.X + offset;
+        var y = Position.Y + offset;
+
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Position = new PixelPoint(
+            Math.Clamp(x, area.X, Math.Max(area.X, area.Right - width)),
+            Math.Clamp(y, area.Y, Math.Max(area.Y, area.Bottom - height)));
     }
 
     private void BeginSettingsPageFade()

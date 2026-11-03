@@ -38,6 +38,19 @@ internal static class PresetTests
         }
         try
         {
+            Check(vm.GetExportCommandWindowSize() == (360d, 480d), "command window opens at the compact size by default");
+            var commandSettings = new SettingsService(Path.Combine(root, "command-window", "settings.json"));
+            async Task CheckCommandWindowSize(AppSettings saved, (double Width, double Height) expected, string message)
+            {
+                commandSettings.Save(saved);
+                var model = new MainViewModel(photo, exporter, commandSettings, new FileLogger(Path.Combine(root, "test.log")));
+                try { Check(model.GetExportCommandWindowSize() == expected, message); }
+                finally { await model.StopDocumentEventsAsync(); }
+            }
+            CheckCommandWindowSize(new() { ExportCommandWindowWidth = 440, ExportCommandWindowHeight = 600 },
+                (360, 480), "command window migrates the legacy saved default").GetAwaiter().GetResult();
+            CheckCommandWindowSize(new() { ExportCommandWindowWidth = 440, ExportCommandWindowHeight = 600, ExportCommandWindowSizeVersion = 1 },
+                (440, 600), "command window retains a size chosen after migration").GetAwaiter().GetResult();
             Check(vm.AvailablePresets.Count == 1 && !vm.AvailablePresets[0].IsSelected, "editable initial default in first workspace");
             vm.Quality = 91; vm.ImageName = "hero"; Save("电商");
             Check(!vm.IsPresetModified, "saved preset matches current parameters");

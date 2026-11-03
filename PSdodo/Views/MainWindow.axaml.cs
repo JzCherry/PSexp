@@ -258,19 +258,24 @@ public partial class MainWindow : Window
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
             _animationViewModel.SettingsNavigationRequested -= OnSettingsNavigationRequested;
+            _animationViewModel.ExportCompleted -= OnExportCompleted;
         }
+        _exportNotice?.Close();
         _animationViewModel = viewModel;
         if (_animationViewModel is not null)
         {
             _animationViewModel.PropertyChanged += OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable += OnPhotoshopDocumentChanged;
             _animationViewModel.SettingsNavigationRequested += OnSettingsNavigationRequested;
+            _animationViewModel.ExportCompleted += OnExportCompleted;
         }
         UpdateStatusAnimationState(restartActiveClocks: true);
     }
 
     private void OnAnimationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainViewModel.ShowExportNotice) && _animationViewModel?.ShowExportNotice == false)
+            _exportNotice?.Close();
         if (e.PropertyName is nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRefreshingStatus)
             && _animationViewModel?.HasPendingDocumentChanges == true)
             QueueForegroundDocumentProbe();
@@ -426,6 +431,7 @@ public partial class MainWindow : Window
     private void OnWindowClosed(object? sender, EventArgs e)
     {
         _isClosing = true;
+        _exportNotice?.Close();
         _animationViewModel?.SetWindowAnimationActive(false);
         StopSettingsPageFade();
         _settingsPageFadeTimer.Tick -= OnSettingsPageFadeTick;
@@ -450,6 +456,7 @@ public partial class MainWindow : Window
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
             _animationViewModel.SettingsNavigationRequested -= OnSettingsNavigationRequested;
+            _animationViewModel.ExportCompleted -= OnExportCompleted;
             _ = _animationViewModel.StopDocumentEventsAsync();
         }
         DataContextChanged -= OnAnimationDataContextChanged;
@@ -928,6 +935,7 @@ public partial class MainWindow : Window
         PersistWindowPlacement();
         _isHiddenToTray = true;
         EndInputEditing();
+        _exportCommandWindow?.Close();
         Hide();
         if (_isDocked) BeginUndockForDrag();
         CloseDockIcon();
