@@ -1,5 +1,5 @@
 // 两种图层导出共用目标规则：排除前缀控制“不独立导出”，不是隐藏开关。
-function resolveLayerExportTargets(doc, canvas, selectedOnly) {
+function collectLayerExportNodes(doc) {
     const nodes = [];
     function visit(items, parents = [], excluded = false) {
         for (const layer of items) {
@@ -10,6 +10,11 @@ function resolveLayerExportTargets(doc, canvas, selectedOnly) {
         }
     }
     visit(Array.from(doc.layers));
+    return nodes;
+}
+
+function resolveLayerExportTargets(doc, canvas, selectedOnly) {
+    const nodes = collectLayerExportNodes(doc);
     const selectedIds = new Set(selectedOnly ? Array.from(doc.activeLayers).map(layer => layer.id) : []);
     const targets = nodes.filter(node => !node.blocked && !node.layer.isBackgroundLayer &&
         (canvas ? node.parents.length === 0 && (!selectedOnly || selectedIds.has(node.layer.id))

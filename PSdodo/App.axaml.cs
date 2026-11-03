@@ -41,6 +41,7 @@ public partial class App : Application
             var mainWindow = new MainWindow
             {
                 DataContext = provider.GetRequiredService<MainViewModel>(),
+                ScriptBridge = provider.GetRequiredService<UxpScriptBridge>(),
             };
             mainWindow.PrepareSavedPlacement();
             desktop.MainWindow = mainWindow;

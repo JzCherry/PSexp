@@ -25,8 +25,14 @@ public partial class MainViewModel : ViewModelBase
     private readonly ISettingsService _settings;
     private readonly FileLogger _fileLogger;
     private CancellationTokenSource? _exportCts;
+    private Task? _statusRefreshTask;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StartExportButtonText))]
+    private bool _isPreparingExport;
+
+    public string StartExportButtonText => IsPreparingExport ? "检查文档…" : "开始导出";
     private bool _settingsInitialized;
-    private bool _suppressNextActivationRefresh;
     private int _documentProcessId;
     private int? _activeExpectedFileCount;
     private double _windowWidth = AppSettings.DefaultWindowWidth;
@@ -217,15 +223,6 @@ public partial class MainViewModel : ViewModelBase
     public string LayerModeHint => !LayerExportRecursive
         ? "画布合成 · " + (IsLayerSelectionSelectedOnly ? "选中的最外层图层/组" : "全部最外层图层/组")
         : "图层素材 · " + (IsLayerSelectionSelectedOnly ? "选中的图层/组" : "全部叶子图层");
-    public string LayerModeHelpText => LayerModeHint + "\n\n"
-        + (!LayerExportRecursive
-            ? "画布合成（原一级图层）：保留完整画布，每个最外层图层或组分别与有效可见公共内容合成。组内子层不独立导出；需要导出子层时切换“图层素材”。"
-            : "图层素材：按 Photoshop 原生图层/组边界输出。选中组整体导出，组与子层同时选中只导出组；全部范围逐个导出叶子图层。")
-        + "\n\n两种方式都支持“排除”前缀：该项及其组内子层不单独导出，手动选中也不绕过。真正背景同样不独立导出。"
-        + (!LayerExportRecursive
-            ? "\n\n可见的背景/排除项保留显示，可当公共背景或水印；隐藏项保持隐藏，实际受父组与叠放关系影响。导出后恢复原可见性。"
-            : "\n\n外部背景/排除项不作为公共内容合入。选中组仍整体包含组内有效内容；依赖图层的效果以 Photoshop 原生结果为准。导出后恢复原选择。")
-        + "\n\n“选中 / 全部”范围、格式、质量、路径和前缀均共用并记忆，切换方式不用重复设置。";
     partial void OnLayerTopLevelSelectedOnlyChanged(bool value)
     {
         if (LayerExportSelectedOnly != value) LayerExportSelectedOnly = value;
@@ -236,7 +233,6 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsLayerSelectionSelectedOnly));
         OnPropertyChanged(nameof(LayerModeHint));
-        OnPropertyChanged(nameof(LayerModeHelpText));
         OnPropertyChanged(nameof(CurrentModeHint));
     }
     partial void OnLayerExportSelectedOnlyChanged(bool value)
@@ -443,7 +439,7 @@ public partial class MainViewModel : ViewModelBase
 
     // ---------- 派生 ----------
     public bool CanExport =>
-        !IsBusy && !IsRefreshingStatus &&
+        !IsBusy && !IsPreparingExport &&
         IsPsRunning &&
         IsBridgeAvailable &&
         HasDocument &&
@@ -534,9 +530,14 @@ public partial class MainViewModel : ViewModelBase
 
     // ---------- 状态机：自动探测 ----------
     // Refresh is always internal COM; only explicit export preflight may opt into external UXP fallback.
-    private async Task RefreshStatusAsync(bool silent, bool quiet = true)
+    private Task RefreshStatusAsync(bool silent, bool quiet = true)
     {
-        if (!CanRefreshStatus) return;
+        if (!CanRefreshStatus) return Task.CompletedTask;
+        return _statusRefreshTask = RefreshStatusCoreAsync(silent, quiet);
+    }
+
+    private async Task RefreshStatusCoreAsync(bool silent, bool quiet)
+    {
         IsRefreshingStatus = true;
         _lastDocumentEventAttemptVersion = _documentEvents?.Version ?? 0;
         try
@@ -632,9 +633,7 @@ public partial class MainViewModel : ViewModelBase
     public async Task RefreshOnActivationAsync(Func<bool>? isForeground = null, bool onlyIfChanged = false)
     {
         if (onlyIfChanged && !HasPendingDocumentChanges) return;
-        var suppress = !onlyIfChanged && _suppressNextActivationRefresh;
-        if (!onlyIfChanged) _suppressNextActivationRefresh = false;
-        if (!CanRefreshOnActivation(AutoRefreshOnActivated, IsBusy, IsRefreshingStatus, suppress)
+        if (!CanRefreshOnActivation(AutoRefreshOnActivated, IsBusy, IsRefreshingStatus, suppressNextActivation: false)
             || isForeground?.Invoke() == false) return;
 
         var reason = IsAlwaysOnTop
@@ -644,8 +643,6 @@ public partial class MainViewModel : ViewModelBase
         await RefreshStatusAsync(silent: true, quiet: true);
         await EnsureDocumentEventsAsync(isForeground);
     }
-
-    private void SuppressNextActivationRefresh() => _suppressNextActivationRefresh = true;
 
     private void RefreshCanExecute()
     {
@@ -819,9 +816,40 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanExport))]
     private async Task StartExportAsync()
     {
-        if (IsViewSetting) return;
-        await RefreshStatusAsync(silent: true, quiet: false);
-        if (!HasDocument || !string.IsNullOrEmpty(DocumentProbeError)) return;
+        if (IsViewSetting || !CanExport) return;
+
+        var pendingRefresh = _statusRefreshTask;
+        IsPreparingExport = true;
+        IsBusy = true;
+        ExportStatusText = "正在检查 Photoshop 文档…";
+        AppendLog("Debug", $"收到导出请求 mode={SelectedMode}，等待文档同步={pendingRefresh is { IsCompleted: false }}");
+        RefreshCanExecute();
+
+        try
+        {
+            if (pendingRefresh is not null) await pendingRefresh;
+            await PrepareAndRunExportAsync();
+        }
+        finally
+        {
+            IsPreparingExport = false;
+            IsBusy = false;
+            RefreshCanExecute();
+        }
+    }
+
+    private async Task PrepareAndRunExportAsync()
+    {
+        await RefreshStatusCoreAsync(silent: true, quiet: false);
+        if (!IsPsRunning || !IsBridgeAvailable || !HasDocument
+            || !string.IsNullOrEmpty(DocumentProbeError) || !HasExportTarget
+            || (SelectedMode is ExportMode.AllArtboards or ExportMode.SelectedArtboards && !HasArtboards)
+            || (SelectedMode == ExportMode.Slices && !HasSlices))
+        {
+            ExportStatusText = ReadinessText;
+            AppendLog("Warn", "未能开始导出：" + ExportStatusText);
+            return;
+        }
 
         var exportSettings = Snapshot();
         AppendLog("Info", $"导出请求 mode={SelectedMode} destination={Destination} parameters={System.Text.Json.JsonSerializer.Serialize(exportSettings)}");
@@ -846,7 +874,6 @@ public partial class MainViewModel : ViewModelBase
                 await RunExportAsync(ct => _export.QuickExportAsync(exportSettings, OnExportProgress, ct), "快速导出", _exportCts.Token);
                 break;
             case ExportMode.AllArtboards:
-                if (!HasArtboards) { AppendLog("Warn", "当前文档没有画板"); return; }
                 await RunExportAsync(ct => _export.ExportAllArtboardsAsync(exportSettings, OnExportProgress, ct), "全部画板导出", _exportCts.Token);
                 break;
             case ExportMode.SelectedArtboards:
@@ -906,13 +933,7 @@ public partial class MainViewModel : ViewModelBase
         string title,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(ResolvedExportPath))
-        {
-            AppendLog("Error", "请先选择导出路径");
-            return;
-        }
-
-        IsBusy = true;
+        IsPreparingExport = false;
         IsExporting = true;
         IsCancelling = false;
         ExportTaskName = title;
@@ -969,33 +990,13 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
             IsExporting = false;
             IsCancelling = false;
             _exportCts?.Dispose();
             _exportCts = null;
             _activeExpectedFileCount = null;
             RefreshCanExecute();
-            // 导出结束后把窗口拉回前台（PS 执行 .psjs 时会抢焦点）。
-            // 仅当窗口确实位于后台时，才抑制这一次程序内部激活。
-            ActivateMainWindow();
         }
-    }
-
-    /// <summary>把 PsExporter 主窗口激活到前台，并抑制这一次程序内部激活刷新。</summary>
-    private void ActivateMainWindow()
-    {
-        try
-        {
-            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow is { } window
-                && !window.IsActive)
-            {
-                SuppressNextActivationRefresh();
-                window.Activate();
-            }
-        }
-        catch { /* ignore */ }
     }
 
     private ExportSettings Snapshot()

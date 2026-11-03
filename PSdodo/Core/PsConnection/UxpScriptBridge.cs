@@ -1,16 +1,17 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using PsExporter.Core.Logging;
 
 namespace PsExporter.Core.PsConnection;
 
 /// <summary>
 /// UXP 脚本桥：通过 .psjs 文件关联触发 PS 的 UXP 运行时执行脚本
-/// 原理：PS 23.5+ 注册了 .psjs 文件关联，用 Process.Start 打开 .psjs 文件时，
+/// 原理：通过系统文件关联打开 .psjs 时，
 /// PS 会用 UXP 运行时执行（支持 require("photoshop")、batchPlay、executeAsModal）。
 /// 限制：无返回值，无法同步等待完成。调用方需通过其他方式（如文件数量变化）判断结果。
 /// </summary>
@@ -18,6 +19,12 @@ public sealed class UxpScriptBridge
 {
     private const int DispatchDelayMs = 500;
     private const int CleanupDelayMs = 2_000;
+    private sealed record DispatchFocus(IntPtr Window, uint InputTick);
+    private DispatchFocus? _dispatchFocus;
+
+    internal bool IsPhotoshopDispatchDeactivation(IntPtr window)
+        => Volatile.Read(ref _dispatchFocus) is { } focus
+            && focus.Window == window && FindPhotoshopFocusHandoff(focus) != IntPtr.Zero;
 
     /// <summary>
     /// 执行 UXP 脚本：写入临时 .psjs 文件（UTF8 BOM），用文件关联打开。
@@ -34,24 +41,21 @@ public sealed class UxpScriptBridge
         await File.WriteAllTextAsync(tempFile, scriptContent, utf8WithBom, ct);
 
         var dispatched = false;
+        DispatchFocus? focus = null;
         try
         {
             ct.ThrowIfCancellationRequested();
-            // 用文件关联打开（相当于双击 .psjs 文件）
-            // UseShellExecute=true 让 Windows 用关联的程序（Photoshop）打开
-            var psi = new ProcessStartInfo
-            {
-                FileName = tempFile,
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-
-            using var proc = System.Diagnostics.Process.Start(psi)
-                ?? throw new InvalidOperationException("Windows 未能通过文件关联启动 Photoshop UXP 脚本");
+            focus = OperatingSystem.IsWindows() ? CaptureDispatchFocus() : null;
+            if (focus is not null) Volatile.Write(ref _dispatchFocus, focus);
+            if (OperatingSystem.IsWindows())
+                await StaHelper.RunAsync(() => DispatchWithoutActivation(tempFile), ct);
+            else
+                using (System.Diagnostics.Process.Start(new ProcessStartInfo(tempFile) { UseShellExecute = true })) { }
             dispatched = true;
-            // 文件关联触发后，PS 异步执行脚本，无法等待返回值
-            // 给 PS 一点时间接收文件打开请求
+
+            // Photoshop 接收脚本的短窗口内只检查一次焦点。
             await Task.Delay(DispatchDelayMs, ct);
+            if (focus is not null) RestoreDispatchFocus(focus);
 
             return new UxpResult
             {
@@ -78,7 +82,118 @@ public sealed class UxpScriptBridge
                 Error = ex
             };
         }
+        finally
+        {
+            if (focus is not null) Interlocked.CompareExchange(ref _dispatchFocus, null, focus);
+        }
     }
+
+    private static bool DispatchWithoutActivation(string path)
+    {
+        const uint noAsync = 0x00000100;
+        const uint noErrorDialog = 0x00000400;
+        const int showNoActivate = 4;
+        var request = new ShellExecuteInfo
+        {
+            Size = (uint)Marshal.SizeOf<ShellExecuteInfo>(),
+            Mask = noAsync | noErrorDialog,
+            File = path,
+            Show = showNoActivate
+        };
+        if (!ShellExecuteEx(ref request))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows 未能通过文件关联打开 Photoshop UXP 脚本");
+        return true;
+    }
+
+    private static DispatchFocus? CaptureDispatchFocus()
+    {
+        var window = GetForegroundWindow();
+        if (window == IntPtr.Zero) return default;
+        _ = GetWindowThreadProcessId(window, out var processId);
+        var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+        return processId == (uint)Environment.ProcessId && GetLastInputInfo(ref input)
+            ? new DispatchFocus(window, input.Tick) : null;
+    }
+
+    private static void RestoreDispatchFocus(DispatchFocus before)
+    {
+        var foreground = FindPhotoshopFocusHandoff(before);
+        const uint owner = 4; // GW_OWNER：保留 Photoshop 自己打开的提示框。
+        if (foreground == IntPtr.Zero || GetWindow(foreground, owner) != IntPtr.Zero) return;
+
+        _ = GetWindowThreadProcessId(before.Window, out var processId);
+        if (processId == (uint)Environment.ProcessId && GetForegroundWindow() == foreground)
+            _ = SetForegroundWindow(before.Window);
+    }
+
+    private static IntPtr FindPhotoshopFocusHandoff(DispatchFocus before)
+    {
+        var foreground = GetForegroundWindow();
+        if (foreground == IntPtr.Zero || foreground == before.Window) return IntPtr.Zero;
+        var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+        if (!GetLastInputInfo(ref input) || input.Tick != before.InputTick) return IntPtr.Zero;
+
+        _ = GetWindowThreadProcessId(foreground, out var processId);
+        if (processId == 0 || processId == (uint)Environment.ProcessId) return IntPtr.Zero;
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)processId);
+            return process.ProcessName.Equals("Photoshop", StringComparison.OrdinalIgnoreCase) &&
+                GetForegroundWindow() == foreground ? foreground : IntPtr.Zero;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+            return IntPtr.Zero;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ShellExecuteInfo
+    {
+        public uint Size;
+        public uint Mask;
+        public IntPtr Window;
+        public string? Verb;
+        public string File;
+        public string? Parameters;
+        public string? Directory;
+        public int Show;
+        public IntPtr Instance;
+        public IntPtr ItemIdList;
+        public string? Class;
+        public IntPtr ClassKey;
+        public uint HotKey;
+        public IntPtr IconOrMonitor;
+        public IntPtr Process;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LastInputInfo
+    {
+        public uint Size;
+        public uint Tick;
+    }
+
+    [DllImport("shell32.dll", EntryPoint = "ShellExecuteExW", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShellExecuteEx(ref ShellExecuteInfo request);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr window, uint command);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetLastInputInfo(ref LastInputInfo input);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr window);
 
     /// <summary>清理临时 .psjs 文件</summary>
     public async Task CleanupTempFileAsync(string tempFilePath)

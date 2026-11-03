@@ -43,7 +43,7 @@ public partial class ExportPresetBar : UserControl
         => Dispatcher.UIThread.Post(() => PresetMore.Flyout?.Hide()); // Let the button command finish before detaching popup content.
     // Called before the window's blank-area drag handler. A dismissal click must
     // neither start a native move loop nor activate a control underneath a menu.
-    public bool DismissOnOutsidePointer(PointerPressedEventArgs args)
+    public bool DismissOnOutsidePointer(PointerPressedEventArgs args, bool allowEditorClickThrough)
     {
         if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return false;
         var source = args.Source as Visual;
@@ -62,6 +62,7 @@ public partial class ExportPresetBar : UserControl
             if (visual is Button) return false;
 
         CancelEditor();
+        if (allowEditorClickThrough) return false;
         args.Handled = true;
         return true;
     }

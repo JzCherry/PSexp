@@ -177,38 +177,8 @@ public sealed class ExportService : IExportService
         }
     }
 
-    // 一级图层保持完整画布合成；图层模式走与画板相同的原生选区导出。
     public Task<PsBridgeResult> ExportLayersAsync(ExportSettings s, ExportProgressHandler? onProgress = null, CancellationToken ct = default)
-        => s.LayerExportRecursive ? ExportNativeLayersAsync(s, onProgress, ct)
-            : ExportLayerBatchAsync(s, sliceMode: false, onProgress, ct);
-
-    private async Task<PsBridgeResult> ExportNativeLayersAsync(
-        ExportSettings settings, ExportProgressHandler? onProgress, CancellationToken ct)
-    {
-        var temporaryDirectory = Path.Combine(Path.GetTempPath(), "PSexp", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(temporaryDirectory);
-        var delivered = false;
-        try
-        {
-            var temporarySettings = CloneWithExportPath(settings, temporaryDirectory);
-            var args = BuildCommonArgs(temporarySettings);
-            args["SELECTED_ONLY"] = settings.LayerExportSelectedOnly ? "true" : "false";
-            _logger.Info($"图层模式使用 Photoshop 原生选区导出；selectedOnly={settings.LayerExportSelectedOnly}；临时目录={temporaryDirectory}");
-            var result = await ExecuteUxpScriptAsync(ScriptNames.ExportNativeLayers, args, temporarySettings, onProgress, ct);
-            var merged = MergeNamedOutputs(result, settings.ExportPath, settings.AutoRename, settings.FilePrefix, "图层");
-            delivered = merged.Success;
-            return merged;
-        }
-        finally
-        {
-            try
-            {
-                if (delivered && Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory, recursive: true);
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-    }
+        => ExportLayerBatchAsync(s, sliceMode: false, onProgress, ct);
 
     public Task<PsBridgeResult> ExportSlicesAsync(ExportSettings s, ExportProgressHandler? onProgress = null, CancellationToken ct = default)
         => ExportLayerBatchAsync(CloneWithExportPath(s, ResolveSliceExportPath(s)), sliceMode: true, onProgress, ct);
@@ -285,7 +255,8 @@ public sealed class ExportService : IExportService
         var result = await UxpTaskWatcher.WaitForCompletionAsync(
             Path.Combine(taskDirectory, "result.json"), s.ExportPath,
             (name, count) => onProgress?.Invoke(name, count), ct,
-            backgroundSnapshot: backgroundSnapshot, expectedFileCount: s.ExpectedFileCount);
+            backgroundSnapshot: backgroundSnapshot, expectedFileCount: s.ExpectedFileCount,
+            onBackgroundSubmitted: receipt => _logger.Info($"[task={taskId}] 已提交后台导出，等待图片写入；回执={receipt}"));
         _logger.Info($"[task={taskId}] 回执={result.ReturnValue}");
         if (backgroundSnapshot is not null)
             _logger.Info($"[task={taskId}] 后台图片写入确认 success={result.Success} count={result.ExportedCount} files={System.Text.Json.JsonSerializer.Serialize(result.OutputFiles)}");
@@ -513,7 +484,7 @@ public sealed class ExportService : IExportService
             new Dictionary<string, string>
             {
                 ["SCRIPT_BODY"] = body,
-                ["WAIT_FOR_BACKGROUND_EXPORT"] = scriptName is ScriptNames.ExportAllArtboards or ScriptNames.ExportSelectedArtboards or ScriptNames.ExportNativeLayers ? "true" : "false",
+                ["WAIT_FOR_BACKGROUND_EXPORT"] = scriptName is ScriptNames.ExportAllArtboards or ScriptNames.ExportSelectedArtboards ? "true" : "false",
                 ["EXPORT_FORMAT"] = s.Format.ToScriptString(),
                 ["EXPECTED_FILE_COUNT"] = Math.Max(0, s.ExpectedFileCount ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture)
             }, s, onProgress, ct);

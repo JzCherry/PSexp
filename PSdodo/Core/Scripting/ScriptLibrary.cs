@@ -54,7 +54,7 @@ public static class ScriptLibrary
     }
 
     private static string ComposeLayerTargets(string logicalName, string script)
-        => logicalName is ScriptNames.ExportLayerBatch or ScriptNames.ExportNativeLayers
+        => logicalName == ScriptNames.ExportLayerBatch
             ? GetScript("export/layer_targets") + "\n" + script : script;
 
     /// <summary>正则提取脚本中所有 {{NAME}} 占位符（去重）</summary>

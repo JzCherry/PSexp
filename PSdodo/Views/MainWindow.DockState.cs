@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using PsExporter.Core.PsConnection;
 using PsExporter.Services;
 using PsExporter.ViewModels;
 
@@ -10,6 +11,8 @@ namespace PsExporter.Views;
 
 public partial class MainWindow
 {
+    internal UxpScriptBridge? ScriptBridge { get; init; }
+
     private bool _dockRetractionQueued;
     private bool _dockRetractionRequiresInactive;
     private string _dockRetractionReason = "";
@@ -61,6 +64,13 @@ public partial class MainWindow
             if (!CanRetractDock() || generation != _edgeAnimationGeneration) return;
             // 文件选择框、更新确认框及本程序菜单不应使父窗口自动收纳。
             if (inactiveOnly && (IsActive || IsForegroundOwnedByThisApplication())) return;
+            if (inactiveOnly && TryGetPlatformHandle() is { } window &&
+                ScriptBridge?.IsPhotoshopDispatchDeactivation(window.Handle) == true)
+            {
+                if (DataContext is MainViewModel model)
+                    model.LogDockAnimation("[dock] 保持展开：Photoshop 脚本派发引起的失焦");
+                return;
+            }
             if (DataContext is MainViewModel diagnostics)
                 diagnostics.LogDockAnimation($"[dock] retract-request source={source} state={WindowState} active={IsActive}");
             if (WindowState == WindowState.Minimized)

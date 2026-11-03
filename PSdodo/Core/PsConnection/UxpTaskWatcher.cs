@@ -14,7 +14,8 @@ public static class UxpTaskWatcher
     public static async Task<PsBridgeResult> WaitForCompletionAsync(
         string resultPath, string exportPath, Action<string, int>? onProgress = null,
         CancellationToken ct = default, int timeoutMs = DefaultTimeoutMs,
-        ExportDirectorySnapshot? backgroundSnapshot = null, int? expectedFileCount = null)
+        ExportDirectorySnapshot? backgroundSnapshot = null, int? expectedFileCount = null,
+        Action<string>? onBackgroundSubmitted = null)
     {
         var timer = Stopwatch.StartNew();
         var reported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -47,8 +48,11 @@ public static class UxpTaskWatcher
                 if (status.Done)
                 {
                     if (status.Success && status.BackgroundExport)
+                    {
+                        onBackgroundSubmitted?.Invoke(json);
                         return await WaitForBackgroundFilesAsync(status, json, exportPath, backgroundSnapshot,
                             expectedFileCount, onProgress, ct, Math.Max(1, timeoutMs - (int)timer.ElapsedMilliseconds));
+                    }
                     var success = status.Success && files.Count > 0 && files.Count == names.Count;
                     return new PsBridgeResult
                     {
@@ -75,7 +79,7 @@ public static class UxpTaskWatcher
     {
         var format = status.Format?.ToLowerInvariant();
         if (before is null || format is not ("jpg" or "png"))
-            return PsBridgeResult.Failed(new InvalidDataException("画板后台导出缺少有效的目录快照或图片格式"));
+            return PsBridgeResult.Failed(new InvalidDataException("后台导出缺少有效的目录快照或图片格式"));
         var expected = status.ExpectedFileCount is > 0 ? status.ExpectedFileCount
             : expectedFileCount is > 0 ? expectedFileCount : null;
         var timer = Stopwatch.StartNew();
@@ -95,7 +99,7 @@ public static class UxpTaskWatcher
             Logs = [new PsLogEntry
             {
                 Level = success ? PsLogLevel.Info : PsLogLevel.Warn,
-                Message = $"画板后台写入确认：预期={countDescription}；已确认={completed.Count}；等待={timer.ElapsedMilliseconds}ms；文件须非空、未被写入占用、图片尾标记完整且目录连续稳定 {ExportFileWatcher.StablePeriodMs}ms。"
+                Message = $"后台写入确认：预期={countDescription}；已确认={completed.Count}；等待={timer.ElapsedMilliseconds}ms；文件须非空、未被写入占用、图片尾标记完整且目录连续稳定 {ExportFileWatcher.StablePeriodMs}ms。"
             }]
         };
     }

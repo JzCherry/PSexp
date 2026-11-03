@@ -200,6 +200,7 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, (_, args) =>
         {
             if (args.Handled || args.Key != Key.Escape) return;
+            if (DismissLayerHelp()) { args.Handled = true; return; }
             // Close the innermost text menu first, keeping the preset name editor open.
             if (DismissTextInputMenu()) { args.Handled = true; return; }
             if (DataContext is MainViewModel { IsViewSetting: true } settingsModel)
@@ -1017,12 +1018,14 @@ public partial class MainWindow : Window
         if (e.Handled || IsPopupInputSource(e.Source)) return;
         var pointer = e.GetCurrentPoint(this).Properties;
         if ((pointer.IsLeftButtonPressed || pointer.IsRightButtonPressed || pointer.IsMiddleButtonPressed)
-            && DismissTextInputMenu())
+            && (DismissLayerHelp() || DismissTextInputMenu()))
         {
             e.Handled = true; // Closing click must not activate a control under the menu.
             return;
         }
-        if (ExportPresets.DismissOnOutsidePointer(e)) return;
+        var isExportClick = e.Source is Visual source
+            && (ReferenceEquals(source, StartExportButton) || StartExportButton.IsVisualAncestorOf(source));
+        if (ExportPresets.DismissOnOutsidePointer(e, allowEditorClickThrough: isExportClick)) return;
         // 先结束原输入框编辑，再让目标控件处理点击；不吞掉目标控件的事件。
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && FindFocusedEditor() is { } editor)
         {
@@ -1202,4 +1205,49 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ShowWindow(IntPtr hwnd, int command);
+
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter,
+        [MarshalAs(UnmanagedType.Bool)] out bool value, uint flags);
+
+    private Flyout? _openLayerHelp;
+
+    private void OnLayerHelpOpened(object? sender, EventArgs e)
+    {
+        if (sender is not Flyout { Content: StackPanel content } flyout) return;
+        _openLayerHelp = flyout;
+        // SPI_GETCLIENTAREAANIMATION. Keep the final illustration readable when motion is off.
+        const uint getClientAreaAnimation = 0x1042;
+        if (!OperatingSystem.IsWindows()
+            || !SystemParametersInfo(getClientAreaAnimation, 0, out var animationsEnabled, 0)
+            || animationsEnabled)
+        {
+            content.Classes.Add("layer-demo-playing");
+        }
+    }
+
+    private void OnLayerHelpClosed(object? sender, EventArgs e)
+    {
+        if (sender is Flyout { Content: StackPanel content })
+            content.Classes.Remove("layer-demo-playing");
+        if (ReferenceEquals(_openLayerHelp, sender)) _openLayerHelp = null;
+    }
+
+    private void OnLayerHelpKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && DismissLayerHelp()) e.Handled = true;
+    }
+
+    private void OnLayerHelpCloseClick(object? sender, RoutedEventArgs e)
+    {
+        if (DismissLayerHelp()) e.Handled = true;
+    }
+
+    private bool DismissLayerHelp()
+    {
+        if (_openLayerHelp is not { IsOpen: true } flyout) return false;
+        flyout.Hide();
+        return true;
+    }
 }

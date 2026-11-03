@@ -1,6 +1,6 @@
-// 画布合成（原一级图层）入口；递归参数保留旧调用兼容，当前素材模式使用原生入口。
+// 画布合成与图层素材共用目标解析、命名和逐张保存回执。
 // 每次 saveAs 完成后回传文件清单；恢复可见性后才发布 done 回执。
-const { app, core } = require("photoshop");
+const { app, core, constants } = require("photoshop");
 const fs = require("uxp").storage.localFileSystem;
 
 const recursive = {{RECURSIVE}};
@@ -29,6 +29,78 @@ async function report() {
     await resultFile.write(JSON.stringify(state));
 }
 
+// Use a single layered working copy and roll back each crop after saving.
+async function exportAssets(context, source, sourceNodes, targets, saveTarget) {
+    let copy;
+    let autoClose = false;
+    let failure;
+    try {
+        stage = "创建图层素材临时副本";
+        activePath = source.name;
+        copy = await source.duplicate("PSexp 图层素材", false);
+        await context.hostControl.registerAutoCloseDocument(copy.id);
+        autoClose = true;
+
+        const copyNodes = collectLayerExportNodes(copy);
+        if (copyNodes.length !== sourceNodes.length || copyNodes.some((node, index) =>
+            node.layer.name !== sourceNodes[index].layer.name || node.parents.length !== sourceNodes[index].parents.length))
+            throw new Error("临时副本的图层结构与原文档不一致");
+
+        const indexes = new Map(sourceNodes.map((node, index) => [node.layer.id, index]));
+        const visibility = new Map(copyNodes.map(node => [node.layer.id, node.layer.visible]));
+        const bottomUp = [...copyNodes].reverse();
+        for (const target of targets) {
+            if (context.isCancelled) throw new Error("Photoshop 已取消导出");
+            const targetNode = copyNodes[indexes.get(target.id)];
+            stage = "隔离图层素材";
+            activePath = target.name;
+            const suspension = await context.hostControl.suspendHistory({
+                documentID: copy.id, name: "PSexp isolate layer"
+            });
+            let targetFailure;
+            try {
+                for (const node of bottomUp) {
+                    const id = node.layer.id;
+                    const visible = id === targetNode.layer.id || targetNode.parents.includes(id) ||
+                        (node.parents.includes(targetNode.layer.id) && visibility.get(id));
+                    if (node.layer.visible !== visible) node.layer.visible = visible;
+                }
+
+                stage = "裁去素材周围透明区域";
+                await copy.trim(constants.TrimType.TRANSPARENT);
+                await saveTarget(copy, target);
+            } catch (error) {
+                targetFailure = error;
+            } finally {
+                if (!context.isCancelled) {
+                    try {
+                        await context.hostControl.resumeHistory(suspension, false);
+                    } catch (error) {
+                        if (!targetFailure) stage = "恢复图层素材临时副本";
+                        targetFailure = new Error((targetFailure ? String(targetFailure) + "；" : "") +
+                            "恢复临时副本失败：" + String(error));
+                    }
+                }
+            }
+            if (targetFailure) throw targetFailure;
+        }
+    } catch (error) {
+        failure = error;
+    } finally {
+        if (copy) {
+            try {
+                if (!autoClose) await copy.closeWithoutSaving();
+                if (!context.isCancelled) app.activeDocument = source;
+            } catch (error) {
+                if (!failure) stage = "关闭图层素材临时副本";
+                failure = new Error((failure ? String(failure) + "；" : "") +
+                    "清理临时副本失败：" + String(error));
+            }
+        }
+    }
+    if (failure) throw failure;
+}
+
 async function exportBatch(executionContext) {
     if (app.documents.length === 0) throw new Error("没有打开的文档");
     const doc = app.activeDocument;
@@ -43,6 +115,34 @@ async function exportBatch(executionContext) {
     const existingNames = new Set((await folder.getEntries()).map(entry => entry.name.toLowerCase()));
     const docName = safeName(doc.name.replace(/\.[^.]+$/, ""));
     const prefix = imageName ? safeName(imageName) : (withDocName ? docName : "");
+
+    async function saveTarget(document, target) {
+        const stem = (prefix ? prefix + "_" : "") + safeName(target.name);
+        let name = stem + "." + format;
+        if (rename) {
+            let index = 1;
+            while (existingNames.has(name.toLowerCase())) name = stem + "_" + index++ + "." + format;
+        }
+        stage = "创建导出文件";
+        activePath = exportFolderUrl + "/" + name;
+        const entry = await folder.createFile(name, { overwrite: !rename });
+        stage = "保存 " + format.toUpperCase() + " 副本";
+        if (format === "png") await document.saveAs.png(entry, {}, true);
+        else if (format === "jpg") await document.saveAs.jpg(entry, { quality: Math.round(12 * quality / 100) }, true);
+        else throw new Error("不支持的导出格式: " + format);
+        existingNames.add(name.toLowerCase());
+        // 覆盖模式下不同图层可以同名；回执记录最终文件而非重复路径。
+        if (!state.files.some(existing => existing.toLowerCase() === name.toLowerCase())) state.files.push(name);
+        stage = "写入导出进度";
+        activePath = resultFolderUrl + "/result.json";
+        await report();
+    }
+
+    if (recursive) {
+        await exportAssets(executionContext, doc, nodes, targets, saveTarget);
+        return;
+    }
+
     let failure;
     try {
         for (const target of targets) {
@@ -50,32 +150,14 @@ async function exportBatch(executionContext) {
             stage = "切换图层可见性";
             activePath = target.name;
             for (const layer of [...layers].reverse()) {
-                // 背景与排除分支保留原显示状态；递归目标同时展开祖先组。
+                // 画布合成保留背景与排除分支的原显示状态。
                 const node = nodes.find(item => item.layer.id === layer.id);
                 const targetNode = nodes.find(item => item.layer.id === target.id);
                 const visible = layer.id === target.id || targetNode.parents.includes(layer.id) ||
                     ((node.blocked || layer.isBackgroundLayer || node.parents.includes(target.id)) && visibility.get(layer.id));
                 if (layer.visible !== visible) layer.visible = visible;
             }
-            const stem = (prefix ? prefix + "_" : "") + safeName(target.name);
-            let name = stem + "." + format;
-            if (rename) {
-                let index = 1;
-                while (existingNames.has(name.toLowerCase())) name = stem + "_" + index++ + "." + format;
-            }
-            stage = "创建导出文件";
-            activePath = exportFolderUrl + "/" + name;
-            const entry = await folder.createFile(name, { overwrite: !rename });
-            stage = "保存 " + format.toUpperCase() + " 副本";
-            if (format === "png") await doc.saveAs.png(entry, {}, true);
-            else if (format === "jpg") await doc.saveAs.jpg(entry, { quality: Math.round(12 * quality / 100) }, true);
-            else throw new Error("不支持的导出格式: " + format);
-            existingNames.add(name.toLowerCase());
-            // 覆盖模式下不同图层可以同名；回执记录最终文件而非重复路径。
-            if (!state.files.some(existing => existing.toLowerCase() === name.toLowerCase())) state.files.push(name);
-            stage = "写入导出进度";
-            activePath = resultFolderUrl + "/result.json";
-            await report();
+            await saveTarget(doc, target);
         }
     } catch (error) {
         failure = error;
