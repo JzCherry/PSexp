@@ -221,10 +221,10 @@
         <Setter Property="Foreground" Value="#FFFFFF"/>
     </Style>
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContinuousPresenter">
-        <Setter Property="Background" Value="{StaticResource Brush.AccentHover}"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.AccentHover}"/>
     </Style>
     <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
-        <Setter Property="Background" Value="{StaticResource Brush.AccentPressed}"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.AccentPressed}"/>
     </Style>
     <Style Selector="Button.primary:pointerover, Button.primary:pressed">
         <Setter Property="Foreground" Value="{StaticResource Brush.OnAccent}"/>
@@ -339,7 +339,7 @@
 
     <Style Selector="ProgressBar">
         <Setter Property="Height" Value="4"/>
-        <Setter Property="Foreground" Value="{StaticResource Brush.Accent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
         <Setter Property="Background" Value="{StaticResource Brush.ProgressTrack}"/>
         <Setter Property="CornerRadius" Value="2"/>
     </Style>
@@ -382,11 +382,11 @@
         <Setter Property="FontWeight" Value="Bold"/>
     </Style>
     <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContinuousPresenter">
-        <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
-        <Setter Property="BoxShadow" Value="0 0 0 2 #601E65F2"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+        <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Focus}"/>
     </Style>
     <Style Selector="controls|ContinuousBorder.input-shell:focus-within">
-        <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
     </Style>
     <Style Selector="ToolTip">
         <Setter Property="MaxWidth" Value="320"/>
@@ -421,9 +421,53 @@
         <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}"/>
     </Style>
     <Style Selector="controls|AnimatedSegmentTrack">
-        <Setter Property="IndicatorBrush" Value="{StaticResource Brush.SegmentSelected}"/>
-        <Setter Property="IndicatorBorderBrush" Value="{StaticResource Brush.SegmentSelectedBorder}"/>
-        <Setter Property="HoverBrush" Value="{StaticResource Brush.SegmentHover}"/>
+        <Setter Property="IndicatorBrush" Value="{DynamicResource Brush.SegmentSelected}"/>
+        <Setter Property="IndicatorBorderBrush" Value="{DynamicResource Brush.SegmentSelectedBorder}"/>
+        <Setter Property="HoverBrush" Value="{DynamicResource Brush.SegmentHover}"/>
+    </Style>
+    <Style Selector="ListBox.highlight-palette">
+        <!-- Preserve fractional column widths through the palette to keep both end insets equal. -->
+        <Setter Property="UseLayoutRounding" Value="False"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:ContinuousBorder Height="{StaticResource Control.TrackHeight}"
+                                           CornerRadius="{StaticResource Radius.Sm}" Padding="{StaticResource Padding.HighlightTrack}" BorderThickness="1"
+                                           Background="{DynamicResource Brush.SettingsTrack}" BorderBrush="{DynamicResource Brush.SettingsBorder}">
+                    <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                </controls:ContinuousBorder>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="ListBox.highlight-palette ListBoxItem">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="AutomationProperties.Name" Value="{ReflectionBinding Name}"/>
+        <Setter Property="ToolTip.Tip" Value="{ReflectionBinding Name}"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <controls:ContinuousBorder Name="PaletteSegment" Height="{StaticResource Control.SegmentHeight}"
+                                           CornerRadius="{StaticResource Radius.SegmentInner}" BorderThickness="1"
+                                           BorderBrush="Transparent" Background="Transparent">
+                    <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                </controls:ContinuousBorder>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="ListBox.highlight-palette ListBoxItem:pointerover /template/ controls|ContinuousBorder#PaletteSegment">
+        <Setter Property="Background" Value="{DynamicResource Brush.Hover}"/>
+    </Style>
+    <Style Selector="ListBox.highlight-palette ListBoxItem:selected /template/ controls|ContinuousBorder#PaletteSegment">
+        <Setter Property="Background" Value="{DynamicResource Brush.SegmentSelected}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.TextSecondary}"/>
+    </Style>
+    <Style Selector="ListBox.highlight-palette ListBoxItem:focus-visible /template/ controls|ContinuousBorder#PaletteSegment">
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+    </Style>
+    <Style Selector="controls|ContinuousBorder.highlight-swatch">
+        <Setter Property="Height" Value="14"/>
+        <Setter Property="Margin" Value="2,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.SegmentInner}"/>
     </Style>
     <!-- 悬停与选中表面均由轨道绘制，按钮绘制层不能遮住选中块。 -->
     <Style Selector="Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter, Button.mode:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, Button.mode:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
@@ -438,6 +482,14 @@
         <Setter Property="Height" Value="{StaticResource Control.BadgeHeight}"/>
         <Setter Property="CornerRadius" Value="{StaticResource Radius.Pill}"/>
         <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="controls|ContinuousBorder.caption-version">
+        <Setter Property="Height" Value="{StaticResource Control.BadgeHeight}"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.Pill}"/>
+        <Setter Property="Padding" Value="4,0"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.SurfaceSubtle}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
     <!-- 以 yuSnip 设置窗口的标题栏组为准；不沿用普通图标工具的 28 DIP 尺度。 -->
@@ -524,6 +576,7 @@
         <Setter Property="TextAlignment" Value="Center"/>
     </Style>
     <Style Selector="controls|ContinuousBorder.quality-mark">
+        <Setter Property="Background" Value="{DynamicResource Brush.Border}"/>
         <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
         <Setter Property="RenderTransform" Value="scale(1, 1)"/>
         <Setter Property="Transitions">
@@ -532,6 +585,9 @@
                 <BrushTransition Property="Background" Duration="0:0:0.16"/>
             </Transitions>
         </Setter>
+    </Style>
+    <Style Selector="controls|ContinuousBorder.quality-mark.filled">
+        <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
     </Style>
     <Style Selector="Window.quality-motion Button.qcell:pointerover controls|ContinuousBorder.quality-mark">
         <Setter Property="RenderTransform" Value="scale(1.12, 1.12)"/>

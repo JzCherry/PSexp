@@ -24,6 +24,7 @@ public partial class App : Application
 
     public static SingleInstanceCoordinator? SingleInstance { get; set; }
     internal static ExportInvocation? StartupExport { get; set; }
+    internal static bool SilentStartup { get; set; }
 
     public override void Initialize()
     {
@@ -46,10 +47,16 @@ public partial class App : Application
                 ScriptBridge = provider.GetRequiredService<UxpScriptBridge>(),
             };
             mainWindow.PrepareSavedPlacement();
-            desktop.MainWindow = mainWindow;
             InitializeTray(desktop, mainWindow, model, provider.GetRequiredService<FileLogger>());
+            if (SilentStartup && HasTrayIcon)
+                mainWindow.StartHiddenToTray();
+            else
+                desktop.MainWindow = mainWindow;
+            mainWindow.AttachUpdatePrompt(model);
+            desktop.Exit += (_, _) => model.StopUpdateChecks();
+            Dispatcher.UIThread.Post(() => _ = model.InitializeUpdatesAsync());
             SingleInstance?.StartListening(() =>
-                Dispatcher.UIThread.Post(mainWindow.ActivateFromExternalRequest));
+                Dispatcher.UIThread.Post(() => mainWindow.ActivateFromExternalRequest()));
 
             var stop = new CancellationTokenSource();
             var listener = ExportCommandPipe.ListenAsync(Program.ExportPipeName, (request, ct) =>

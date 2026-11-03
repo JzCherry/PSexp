@@ -63,6 +63,8 @@
       <_ObfuscarConfigLines Include="    &lt;SkipMethod type=&quot;PsExporter.Views.MainWindow&quot; name=&quot;timeEndPeriod&quot; /&gt;" />
       <_ObfuscarConfigLines Include="    &lt;SkipMethod type=&quot;PsExporter.Views.MainWindow&quot; name=&quot;SetForegroundWindow&quot; /&gt;" />
       <_ObfuscarConfigLines Include="    &lt;SkipMethod type=&quot;PsExporter.Views.MainWindow&quot; name=&quot;ShowWindow&quot; /&gt;" />
+      <_ObfuscarConfigLines Include="    &lt;SkipMethod type=&quot;PsExporter.Views.MainWindow&quot; name=&quot;RegisterHotKey&quot; /&gt;" />
+      <_ObfuscarConfigLines Include="    &lt;SkipMethod type=&quot;PsExporter.Views.MainWindow&quot; name=&quot;UnregisterHotKey&quot; /&gt;" />
       <_ObfuscarConfigLines Include="  &lt;/Module&gt;" />
       <_ObfuscarConfigLines Include="&lt;/Obfuscator&gt;" />
     </ItemGroup>

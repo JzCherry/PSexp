@@ -46,6 +46,7 @@ public partial class MainViewModel : ViewModelBase
         _fileLogger = fileLogger;
 
         var s = _settings.Load();
+        ExportHighlightSettings = CreateExportHighlightSettings(s);
         ExportPath = s.DefaultExportPath;
         Destination = s.DefaultDestination is { } savedDestination && Enum.IsDefined(savedDestination)
             ? savedDestination
@@ -68,6 +69,7 @@ public partial class MainViewModel : ViewModelBase
         _isViewSetting = s.ShowSettingsOnStartup;
         Quality = s.DefaultQuality;
         AutoRename = s.DefaultAutoRename;
+        _saveAndCloseAfterExport = s.SaveAndCloseAfterExport;
         FileName = s.SliceFilePrefix ?? string.Empty;
         LayerExportRecursive = s.LayerExportRecursive;
         _layerExportSelectedOnly = s.LayerScopeSelectedOnly ?? (s.LayerExportRecursive ? s.LayerExportSelectedOnly : s.LayerTopLevelSelectedOnly);
@@ -84,6 +86,9 @@ public partial class MainViewModel : ViewModelBase
         if (!_showExportNotice) RefreshSettingsSearch();
         _exportNoticeTarget = Enum.IsDefined(s.ExportNoticeTarget) ? s.ExportNoticeTarget : ExportNoticeTarget.OutputFolder;
         DockRetractDelayMs = s.DockRetractDelayMs is 250 or 420 or 800 ? s.DockRetractDelayMs : 420;
+        _summonHotkey = Services.SummonHotkey.Normalize(s.SummonHotkey, AppSettings.DefaultSummonHotkey);
+        _summonAtPointer = s.SummonAtPointer;
+        ReadSilentStartup();
         IsAlwaysOnTop = s.StartAlwaysOnTop;
         AutoRefreshOnActivated = s.AutoRefreshOnActivated;
         EnableEdgeSnap = s.EnableEdgeSnap;
@@ -206,8 +211,8 @@ public partial class MainViewModel : ViewModelBase
     private bool _autoRename = true;
 
     public string AutoRenameHint => AutoRename
-        ? "同名自动改名已开启：追加序号，保留已有文件。点击改为覆盖同名文件。"
-        : "同名自动改名已关闭：覆盖同名文件。点击改为追加序号、保留已有文件。";
+        ? "重命名已开启。同名时追加序号，保留已有文件。"
+        : "重命名已关闭。同名时覆盖已有文件。";
 
     [ObservableProperty]
     private string _fileName = string.Empty;
@@ -280,6 +285,7 @@ public partial class MainViewModel : ViewModelBase
 
     public bool CanCancel =>
         IsExporting &&
+        !_isSavingExportDocument &&
         !IsCancelling;
 
     public bool CanChangeMode => !IsBusy;
@@ -433,6 +439,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ImageNameHint));
         OnPropertyChanged(nameof(IsArtboardMode));
         OnPropertyChanged(nameof(CurrentModeTitle));
+        OnPropertyChanged(nameof(CurrentExportHighlight));
         OnPropertyChanged(nameof(CurrentModeHint));
         OnPropertyChanged(nameof(ReadinessText));
         RefreshCanExecute();
@@ -732,6 +739,7 @@ public partial class MainViewModel : ViewModelBase
             DefaultFormat = Format,
             DefaultQuality = Math.Clamp(Quality, 1, 100),
             DefaultAutoRename = AutoRename,
+            SaveAndCloseAfterExport = SaveAndCloseAfterExport,
             SliceFilePrefix = FileName,
             SliceFolderName = SliceFolderName,
             QuickImageName = _quickImageName,
@@ -751,6 +759,7 @@ public partial class MainViewModel : ViewModelBase
             LayerExportShowHint = LayerExportShowHint,
             AutoUseDocNameAsPrefix = false,
             ThemeMode = ThemeMode,
+            ExportHighlights = ExportHighlightSettings.ToDictionary(row => row.Mode, row => row.Selected.Value),
             StartAlwaysOnTop = IsAlwaysOnTop,
             AutoRefreshOnActivated = AutoRefreshOnActivated,
             EnableEdgeSnap = EnableEdgeSnap,
@@ -762,6 +771,8 @@ public partial class MainViewModel : ViewModelBase
             ExportNoticeDurationSeconds = ExportNoticeDurationSeconds,
             ExportNoticeTarget = ExportNoticeTarget,
             DockRetractDelayMs = DockRetractDelayMs,
+            SummonHotkey = SummonHotkey,
+            SummonAtPointer = SummonAtPointer,
             WindowPlacement = _windowPlacement,
             WindowWidth = _windowWidth,
             WindowHeight = _windowHeight
@@ -827,9 +838,9 @@ public partial class MainViewModel : ViewModelBase
     // ---------- 命令：开始执行（根据当前选中的模式触发导出） ----------
     [RelayCommand(CanExecute = nameof(CanExport))]
     private Task StartExportAsync()
-        => IsViewSetting || !CanExport ? Task.CompletedTask : StartExportCoreAsync();
+        => IsViewSetting || !CanExport ? Task.CompletedTask : StartExportCoreAsync(saveAndClose: SaveAndCloseAfterExport);
 
-    private async Task StartExportCoreAsync(ExportPresetParameters? preset = null)
+    private async Task StartExportCoreAsync(ExportPresetParameters? preset = null, bool saveAndClose = false)
     {
         var mode = preset?.Mode ?? SelectedMode;
         var pendingRefresh = _statusRefreshTask;
@@ -842,7 +853,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             if (pendingRefresh is not null) await pendingRefresh;
-            await PrepareAndRunExportAsync(mode, preset);
+            await PrepareAndRunExportAsync(mode, preset, saveAndClose);
         }
         finally
         {
@@ -852,7 +863,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private async Task PrepareAndRunExportAsync(ExportMode mode, ExportPresetParameters? preset)
+    private async Task PrepareAndRunExportAsync(ExportMode mode, ExportPresetParameters? preset, bool saveAndClose)
     {
         await RefreshStatusCoreAsync(silent: true, quiet: false);
         var destination = preset?.Destination ?? Destination;
@@ -895,7 +906,8 @@ public partial class MainViewModel : ViewModelBase
             _ => throw new ArgumentOutOfRangeException(nameof(mode))
         };
         await RunExportAsync(job.Run, job.Title, exportSettings.ExportPath,
-            mode == ExportMode.AllArtboards ? exportSettings.ExpectedFileCount : null, _exportCts.Token);
+            mode == ExportMode.AllArtboards ? exportSettings.ExpectedFileCount : null,
+            saveAndClose ? _documentProcessId : null, _exportCts.Token);
     }
 
     [RelayCommand(CanExecute = nameof(CanCancel))]
@@ -941,7 +953,7 @@ public partial class MainViewModel : ViewModelBase
     private async Task RunExportAsync(
         Func<CancellationToken, Task<PsBridgeResult>> factory,
         string title, string outputDirectory, int? expectedFileCount,
-        CancellationToken cancellationToken)
+        int? saveAndCloseProcessId, CancellationToken cancellationToken)
     {
         IsPreparingExport = false;
         IsExporting = true;
@@ -977,6 +989,8 @@ public partial class MainViewModel : ViewModelBase
                 ExportStatusText = $"{title} 完成 · 共 {ExportedCount} 个文件"
                     + (string.IsNullOrWhiteSpace(exportWarning) ? "" : "；" + exportWarning);
                 AppendLog("Info", $"✔ {title} 完成");
+                if (saveAndCloseProcessId is { } processId && result.ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
+                    await SaveAndCloseExportedDocumentAsync(result.ReturnValue, processId);
                 if (ShowExportNotice && CanOpenExportFolder && ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
                     ExportCompleted?.Invoke(_lastSuccessfulExportDirectory, ExportedCount);
             }
@@ -1000,6 +1014,7 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
+            _isSavingExportDocument = false;
             IsExporting = false;
             IsCancelling = false;
             _exportCts?.Dispose();

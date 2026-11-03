@@ -1,0 +1,23 @@
+const { app, core, constants } = require("photoshop");
+const fs = require("uxp").storage.localFileSystem;
+const folder = await fs.getEntryWithUrl("{{RESULT_FOLDER_URL}}");
+const receipt = await folder.createFile("result.json", { overwrite: true });
+const state = { done: false, success: false, error: "" };
+await receipt.write(JSON.stringify(state));
+try {
+    await core.executeAsModal(async () => {
+        const doc = Array.from(app.documents).find(item => item.id === {{DOCUMENT_ID}});
+        if (!doc) throw new Error("原导出文档已不在 Photoshop 中");
+        if (String(doc.path || "") !== "{{DOCUMENT_PATH}}")
+            throw new Error("原导出文档的保存路径已变化");
+        await doc.close(constants.SaveOptions.SAVECHANGES);
+        if (Array.from(app.documents).some(item => item.id === {{DOCUMENT_ID}}))
+            throw new Error("Photoshop 未确认关闭文档");
+    }, { commandName: "Save and Close Exported Document" });
+    state.success = true;
+} catch (error) {
+    state.error = String(error);
+} finally {
+    state.done = true;
+    await receipt.write(JSON.stringify(state));
+}

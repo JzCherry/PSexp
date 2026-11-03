@@ -6,6 +6,9 @@ using PsExporter.Models;
 using PsExporter.Services;
 using PsExporter.ViewModels;
 using PsExporter.Views;
+using Avalonia;
+using Avalonia.Input;
+using Avalonia.Media;
 using System.Runtime.InteropServices;
 
 var failures = new List<string>();
@@ -72,8 +75,11 @@ try
             LayerExportShowHint = true,
             AutoUseDocNameAsPrefix = true,
             ThemeMode = AppThemeMode.Dark,
+            ExportHighlights = new() { [ExportMode.AllArtboards] = ExportHighlight.Violet, [ExportMode.Slices] = ExportHighlight.Sky },
             StartAlwaysOnTop = true,
             AutoRefreshOnActivated = false,
+            SummonHotkey = "Ctrl+Alt+Shift+F12",
+            SummonAtPointer = true,
             WindowWidth = 1120,
             WindowHeight = 880
         };
@@ -88,10 +94,58 @@ try
         Equal(expected.LayerExportShowHint, loaded.LayerExportShowHint);
         Equal(expected.AutoUseDocNameAsPrefix, loaded.AutoUseDocNameAsPrefix);
         Equal(expected.ThemeMode, loaded.ThemeMode);
+        Equal(ExportHighlight.Violet, loaded.ExportHighlights[ExportMode.AllArtboards]);
+        Equal(ExportHighlight.Sky, loaded.ExportHighlights[ExportMode.Slices]);
         Equal(expected.StartAlwaysOnTop, loaded.StartAlwaysOnTop);
         Equal(expected.AutoRefreshOnActivated, loaded.AutoRefreshOnActivated);
+        Equal(expected.SummonHotkey, loaded.SummonHotkey);
+        Equal(expected.SummonAtPointer, loaded.SummonAtPointer);
         Equal(expected.WindowWidth, loaded.WindowWidth);
         Equal(expected.WindowHeight, loaded.WindowHeight);
+
+        // 空组合键＝关闭，落盘后不能被悄悄写回默认值。
+        var cleared = new AppSettings
+        {
+            DefaultExportPath = expected.DefaultExportPath,
+            SummonHotkey = "",
+            SummonAtPointer = false
+        };
+        True(service.Save(cleared));
+        var reloaded = new SettingsService(settingsPath).Load();
+        Equal("", reloaded.SummonHotkey);
+        Equal(false, reloaded.SummonAtPointer);
+        Equal(0, reloaded.ExportHighlights.Count);
+    });
+
+    Run("Export highlight colors remain readable in both themes", () =>
+    {
+        Equal(ExportHighlight.Blue, ExportHighlightSetting.Palette[0].Value);
+        foreach (var choice in ExportHighlightSetting.Palette)
+        {
+            var color = ((ISolidColorBrush)choice.Fill).Color;
+            True(Contrast(color, Colors.White) >= 4.5, choice.Name + " 的白色徽标文字对比度不足");
+            foreach (var state in new[] { choice.LightInk, choice.PressedFill })
+                True(Contrast(((ISolidColorBrush)state).Color, Colors.White) >= 4.5, choice.Name + " 的导出按钮白字对比度不足");
+            foreach (var surface in new[] { "#F8F9FD", "#1B1F2A", "#1F232C" })
+                True(Contrast(color, Color.Parse(surface)) >= 3, choice.Name + " 的边框或色点对比度不足：" + surface);
+            var swatch = ((ISolidColorBrush)choice.Swatch).Color;
+            True(Contrast(swatch, Color.Parse("#EEF1F6")) >= 3, choice.Name + " 的浅色轨道色块对比度不足");
+            True(Contrast(swatch, Color.Parse("#121620")) >= 3, choice.Name + " 的深色轨道色块对比度不足");
+        }
+
+        static double Contrast(Color a, Color b)
+        {
+            static double Linear(byte channel)
+            {
+                var srgb = channel / 255d;
+                return srgb <= 0.04045 ? srgb / 12.92 : Math.Pow((srgb + 0.055) / 1.055, 2.4);
+            }
+            static double Luminance(Color color) =>
+                0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+            var left = Luminance(a);
+            var right = Luminance(b);
+            return (Math.Max(left, right) + 0.05) / (Math.Min(left, right) + 0.05);
+        }
     });
 
     Run("User window size persists without changing its aspect ratio", () =>
@@ -631,6 +685,19 @@ try
         Equal(1, progress.Count);
     });
 
+    await RunAsync("Document action receipt succeeds without image files", async () =>
+    {
+        var receipt = Path.Combine(tempRoot, "save-and-close.json");
+        File.WriteAllText(receipt, """{"done":true,"success":true}""");
+        var action = await UxpTaskWatcher.WaitForCompletionAsync(receipt, exportPath: null);
+        True(action.Success);
+        True(!(await UxpTaskWatcher.WaitForCompletionAsync(receipt, tempRoot)).Success);
+        File.WriteAllText(receipt, """{"done":true,"success":false,"error":"save failed"}""");
+        var failed = await UxpTaskWatcher.WaitForCompletionAsync(receipt, exportPath: null);
+        True(!failed.Success);
+        Equal("save failed", failed.Error?.Message);
+    });
+
     await RunAsync("UXP error receipt preserves completed files", async () =>
     {
         var output = Path.Combine(tempRoot, "uxp-error");
@@ -986,6 +1053,100 @@ try
         var offscreen = new Avalonia.PixelPoint(-32000, -32000);
         var expanded = new Avalonia.PixelPoint(400, 300);
         True(offscreen != expanded, "Reveal animation must not be short-circuited by equal position check.");
+    });
+
+    Run("Summon hotkey maps only the four contiguous Avalonia key ranges", () =>
+    {
+        // Avalonia 12 的 Key 取值不是 Windows 虚拟键码；一旦上游改序号，这里先失败，而不是热键悄悄错位。
+        Equal(44, (int)Key.A);
+        Equal(34, (int)Key.D0);
+        Equal(74, (int)Key.NumPad0);
+        Equal(90, (int)Key.F1);
+        Equal(1, (int)KeyModifiers.Alt);
+        Equal(2, (int)KeyModifiers.Control);
+        Equal(4, (int)KeyModifiers.Shift);
+        Equal(8, (int)KeyModifiers.Meta);
+
+        Key[] keys = [Key.A, Key.Z, Key.D0, Key.D9, Key.NumPad0, Key.NumPad9, Key.F1, Key.F12];
+        uint[] virtualKeys = [0x41, 0x5A, 0x30, 0x39, 0x60, 0x69, 0x70, 0x7B];
+        for (var index = 0; index < keys.Length; index++)
+        {
+            True(SummonHotkey.TryGetVirtualKey(keys[index], out var actual), $"{keys[index]} 应能映射成虚拟键码");
+            Equal(virtualKeys[index], actual);
+        }
+        foreach (var key in new[] { Key.None, Key.Escape, Key.Space, Key.Tab, Key.OemMinus, Key.Add })
+            True(!SummonHotkey.TryGetVirtualKey(key, out _), $"{key} 不支持作为唤起热键");
+    });
+
+    Run("Summon hotkey text round-trips and rejects combos RegisterHotKey would swallow", () =>
+    {
+        Equal("Ctrl+Alt+E", SummonHotkey.Normalize("alt+ctrl+e", "Ctrl+Alt+Shift+Z"));
+        Equal("Ctrl+Alt+Shift+Win+F12", SummonHotkey.Normalize("ctrl + alt + SHIFT + win + f12", "Ctrl+Alt+E"));
+        Equal("Ctrl+NumPad7", SummonHotkey.Normalize("Ctrl+NumPad7", "Ctrl+Alt+E"));
+        True(SummonHotkey.TryFormat(Key.E, KeyModifiers.Control | KeyModifiers.Alt, out var formatted));
+        Equal("Ctrl+Alt+E", formatted);
+
+        string[] dirty = ["E", "5", "NumPad3", "Ctrl+Alt", "Ctrl+Escape", "Ctrl+OemMinus", "Ctrl+E+R", "Ctrl+", "NumPad", "Alt+Shift+Win"];
+        True(!SummonHotkey.TryParse("", out _, out _), "“” 应被拒绝");
+        True(!SummonHotkey.TryParse("   ", out _, out _), "“   ” 应被拒绝");
+        foreach (var text in dirty)
+            True(!SummonHotkey.TryParse(text, out _, out _), $"“{text}” 应被拒绝");
+        // 空串是合法的「关闭」，原样保留；只有读不懂的脏值才回落默认组合。
+        Equal("", SummonHotkey.Normalize("", "Ctrl+Alt+E"));
+        Equal("", SummonHotkey.Normalize("   ", "Ctrl+Alt+E"));
+        foreach (var text in dirty)
+            Equal("Ctrl+Alt+E", SummonHotkey.Normalize(text, "Ctrl+Alt+E"));
+        Equal("Ctrl+Alt+E", SummonHotkey.Normalize("召唤神兽", "Ctrl+Alt+E"));
+    });
+
+    Run("Summon hotkey allows bare function keys and refuses bare letters", () =>
+    {
+        // 单用功能键是用户要的口子，但只开 F1–F12：裸字母/数字会吞掉系统里的普通输入。
+        foreach (var key in new[] { Key.F1, Key.F5, Key.F6, Key.F12 })
+        {
+            True(SummonHotkey.TryParse(key.ToString(), out var parsed, out var modifiers) && modifiers == KeyModifiers.None,
+                $"{key} 应能单独作为唤起键");
+            Equal(key, parsed);
+            True(SummonHotkey.TryFormat(parsed, modifiers, out var text));
+            Equal(key.ToString(), text);
+        }
+        foreach (var key in new[] { Key.A, Key.D5, Key.NumPad3, Key.F13 })
+            True(!SummonHotkey.Supports(key, KeyModifiers.None), $"{key} 不应允许单键注册");
+        Equal(0u, SummonHotkey.NativeModifiers(KeyModifiers.None));
+        Equal(0x3u, SummonHotkey.NativeModifiers(KeyModifiers.Alt | KeyModifiers.Control));
+        Equal(0xCu, SummonHotkey.NativeModifiers(KeyModifiers.Shift | KeyModifiers.Meta));
+        Equal(0xFu, SummonHotkey.NativeModifiers(KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Meta));
+    });
+
+    Run("Summon placement keeps the window beside the pointer and fully on screen", () =>
+    {
+        var area = new PixelRect(0, 0, 1920, 1080);
+        // 默认落在光标右下，留一个空隙。
+        Equal(new PixelPoint(116, 116), SummonPlacement.Beside(new PixelPoint(100, 100), 600, 800, area, 16));
+        // 右边放不下就翻到光标左侧，且整块仍在工作区内。
+        Equal(new PixelPoint(1084, 116), SummonPlacement.Beside(new PixelPoint(1700, 100), 600, 800, area, 16));
+        // 下边放不下就翻到光标上方。
+        Equal(new PixelPoint(116, 84), SummonPlacement.Beside(new PixelPoint(100, 900), 600, 800, area, 16));
+        // 角落：两条边同时翻转。
+        Equal(new PixelPoint(1284, 244), SummonPlacement.Beside(new PixelPoint(1900, 1060), 600, 800, area, 16));
+        // 窗口比工作区还高：翻到哪都放不下，退化成贴顶，绝不越界。
+        Equal(new PixelPoint(116, 0), SummonPlacement.Beside(new PixelPoint(100, 100), 600, 1200, area, 16));
+        // 副屏带偏移的工作区：坐标跟着那块屏，不能被拉回主屏。
+        var second = new PixelRect(1920, 0, 1920, 1080);
+        Equal(new PixelPoint(2516, 516), SummonPlacement.Beside(new PixelPoint(2500, 500), 600, 400, second, 16));
+
+        // 逐点核对：只要窗口放得下，就必须整块落在工作区里。
+        foreach (var cursor in new[]
+        {
+            new PixelPoint(0, 0), new PixelPoint(1919, 0), new PixelPoint(0, 1079), new PixelPoint(1919, 1079),
+            new PixelPoint(960, 540), new PixelPoint(2, 1077)
+        })
+        {
+            var position = SummonPlacement.Beside(cursor, 600, 800, area, 16);
+            var rect = new PixelRect(position, new PixelSize(600, 800));
+            True(area.Contains(rect.TopLeft) && area.Contains(new PixelPoint(rect.Right - 1, rect.Bottom - 1)),
+                $"{cursor} 唤起的窗口越界：{rect}");
+        }
     });
 }
 finally

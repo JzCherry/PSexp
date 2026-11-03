@@ -358,6 +358,7 @@ public partial class MainWindow
             else if (_edgeCanReverseOnPointerReturn)
                 StartEdgeAnimation(_dockExpandedPos, DockAnimationMotion.RevealDurationMs);
         }
+        else if (_dockRevealedByHotkey) return;
         else if (inside)
         {
             _pointerOutsideDockSince = DateTime.MinValue;
@@ -462,9 +463,14 @@ public partial class MainWindow
             return;
         }
         _isDockRevealed = !hiding;
+        if (hiding) _dockRevealedByHotkey = false;
         QueueForegroundDocumentProbe();
         UpdateStatusAnimationState(restartActiveClocks: false);
-        if (_isDocked && _isDockRevealed) _edgeHoverTimer.Start();
+        if (_isDocked && _isDockRevealed)
+        {
+            if (!_dockRevealedByHotkey) _edgeHoverTimer.Start();
+            else if (!IsActive) TryQueueDockRetraction("deactivated");
+        }
         _ = SavePlacementAfterDockMotionAsync(generation);
     }
 }

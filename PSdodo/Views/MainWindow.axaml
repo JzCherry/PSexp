@@ -67,16 +67,19 @@
                                Stretch="Uniform"
                                VerticalAlignment="Center"/>
 
-                        <TextBlock Grid.Column="1"
-                                   Margin="8,0,0,0"
-                                   Text="{Binding ApplicationTitle}"
-                                   TextTrimming="CharacterEllipsis"
-                                   Classes="subtitle"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
+                        <Grid Grid.Column="1" Margin="6,0,0,0" ColumnDefinitions="Auto,*"
+                              ColumnSpacing="{StaticResource Space.Xs}" VerticalAlignment="Center">
+                            <TextBlock Text="PSexp" Classes="subtitle" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <controls:ContinuousBorder Grid.Column="1" Classes="caption-version"
+                                                       ToolTip.Tip="{Binding UpdateVersionLabel}">
+                                <TextBlock Text="{Binding UpdateVersionLabel}" Classes="micro"
+                                           Foreground="{DynamicResource Brush.TextSecondary}"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </controls:ContinuousBorder>
+                        </Grid>
 
                         <Button Grid.Column="2"
-                                Margin="8,0,0,0" VerticalAlignment="Center"
+                                Margin="4,0,0,0" VerticalAlignment="Center"
                                 Classes="tool"
                                 chrome:WindowDecorationProperties.ElementRole="User"
                                 Command="{Binding RefreshStatusCommand}"
@@ -98,7 +101,7 @@
                                 Foreground="{Binding $parent[Button].Foreground}"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Button>
-                        <Button Grid.Column="4"
+                        <Button x:Name="SettingsToggleButton" Grid.Column="4"
                                 Margin="8,0,8,0" VerticalAlignment="Center"
                                 Classes="tool"
                                 chrome:WindowDecorationProperties.ElementRole="User"
@@ -140,7 +143,7 @@
                         Margin="16,12,16,6"
                         IsVisible="{Binding !IsViewSetting}"
                         Background="{StaticResource Brush.Surface}"
-                        BorderBrush="{StaticResource Brush.StatusBorder}"
+                        BorderBrush="{Binding CurrentExportHighlight.Outline}"
                         BorderThickness="{StaticResource Thickness.Thin}"
                         CornerRadius="{StaticResource Radius.Md}"
                         ClipToBounds="True">
@@ -224,7 +227,7 @@
                                         VerticalAlignment="Center"/>
 
                                 <controls:ContinuousBorder Grid.Column="4"
-                                        Background="{StaticResource Brush.Accent}"
+                                        Background="{Binding CurrentExportHighlight.Fill}"
                                         CornerRadius="{StaticResource Radius.Sm}"
                                         Padding="9,5"
                                         HorizontalAlignment="Stretch"
@@ -232,12 +235,12 @@
                                     <StackPanel Spacing="0">
                                         <TextBlock Text="当前模式"
                                                    Classes="micro"
-                                                   Foreground="#DDE0FF"
+                                                   Foreground="{StaticResource Brush.OnAccent}"
                                                    HorizontalAlignment="Center"/>
                                         <TextBlock Text="{Binding CurrentModeTitle}"
                                                    FontSize="11"
                                                    FontWeight="SemiBold"
-                                                   Foreground="#FFFFFF"
+                                                   Foreground="{StaticResource Brush.OnAccent}"
                                                    TextTrimming="CharacterEllipsis"
                                                    HorizontalAlignment="Center"/>
                                     </StackPanel>
@@ -250,7 +253,10 @@
                 <!-- 2. Mode Selector: content-sized segments with consistent gaps -->
                 <controls:AnimatedSegmentTrack Grid.Row="2"
                         Margin="16,6,16,6"
-                        IsVisible="{Binding !IsViewSetting}" Classes="choice-track" SelectionValue="{Binding SelectedMode}">
+                        IsVisible="{Binding !IsViewSetting}" Classes="choice-track" SelectionValue="{Binding SelectedMode}"
+                        IndicatorBrush="{Binding CurrentExportHighlight.Tint}"
+                        IndicatorBorderBrush="{Binding CurrentExportHighlight.Outline}"
+                        HoverBrush="{Binding CurrentExportHighlight.Hover}">
                     <controls:SegmentPanel>
                         <Button
                                 Classes="mode"
@@ -341,28 +347,34 @@
                                       RowSpacing="{StaticResource Space.Md}">
 
                                     <controls:ContinuousBorder Grid.Row="0" Classes="workspace-heading">
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                            <StackPanel Grid.Column="0"
+                                        <controls:SegmentOptionRow LabelWidth="92">
+                                            <StackPanel
                                                         Orientation="Horizontal"
                                                         Spacing="8"
                                                         VerticalAlignment="Center">
                                                 <controls:ContinuousBorder Width="4"
                                                         Height="22"
-                                                        Background="{StaticResource Brush.Accent}"
+                                                        Background="{DynamicResource Brush.Accent}"
                                                         CornerRadius="2"/>
                                                 <TextBlock Text="{Binding CurrentModeTitle}"
                                                            Classes="title"
                                                            VerticalAlignment="Center"/>
                                             </StackPanel>
 
-                                            <StackPanel Grid.Column="1"
+                                            <StackPanel HorizontalAlignment="Right"
                                                         Classes="output-meta" Orientation="Horizontal" Height="{StaticResource Control.BadgeHeight}"
                                                         Spacing="6"
                                                         VerticalAlignment="Center">
                                                 <Button Classes="compact-action" Classes.active="{Binding AutoRename}"
                                                     Command="{Binding ToggleAutoRenameCommand}" ToolTip.Tip="{Binding AutoRenameHint}"
-                                                    AutomationProperties.Name="同名自动改名" AutomationProperties.HelpText="{Binding AutoRenameHint}">
-                                                    <TextBlock Text="自动改名" VerticalAlignment="Center"/>
+                                                    AutomationProperties.Name="同名重命名" AutomationProperties.HelpText="{Binding AutoRenameHint}">
+                                                    <TextBlock Text="重命名" VerticalAlignment="Center"/>
+                                                </Button>
+                                                <Button Classes="compact-action" Classes.active="{Binding SaveAndCloseAfterExport}"
+                                                    Command="{Binding ToggleSaveAndCloseAfterExportCommand}" ToolTip.Tip="{Binding SaveAndCloseHint}"
+                                                    IsEnabled="{Binding CanChangeMode}"
+                                                    AutomationProperties.Name="导出后保存并关闭文档" AutomationProperties.HelpText="{Binding SaveAndCloseHint}">
+                                                    <TextBlock Text="保存并关闭" VerticalAlignment="Center"/>
                                                 </Button>
                                                 <controls:ContinuousBorder Background="{StaticResource Brush.Surface}"
                                                         BorderBrush="{StaticResource Brush.Border}"
@@ -382,19 +394,19 @@
                                                                Foreground="{StaticResource Brush.TextSecondary}"
                                                                FontWeight="SemiBold"/>
                                                 </controls:ContinuousBorder>
-                                                <controls:ContinuousBorder Background="{StaticResource Brush.StatusSurface}"
-                                                        BorderBrush="{StaticResource Brush.StatusBorder}"
+                                                <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
+                                                        BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
                                                         BorderThickness="1"
                                                         IsVisible="{Binding IsJpgFormat}" Classes="meta-badge">
                                                     <TextBlock Classes="micro meta-label"
-                                                               Foreground="{StaticResource Brush.StatusText}"
+                                                               Foreground="{DynamicResource Brush.Accent}"
                                                                FontWeight="SemiBold">
                                                         <Run Text="{Binding Quality}"/>
                                                         <Run Text="%"/>
                                                     </TextBlock>
                                                 </controls:ContinuousBorder>
                                             </StackPanel>
-                                        </Grid>
+                                        </controls:SegmentOptionRow>
                                     </controls:ContinuousBorder>
 
                                         <StackPanel Grid.Row="1" Margin="0,6,0,8" Spacing="20">
@@ -623,31 +635,31 @@
                                                                   VerticalAlignment="Center"
                                                                   Background="Transparent"
                                                                   ClipToBounds="False">
-<Button Grid.Column="0" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="4" ToolTip.Tip="4%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=4}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="1" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="8" ToolTip.Tip="8%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=8}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="2" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="12" ToolTip.Tip="12%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=12}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="3" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="16" ToolTip.Tip="16%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=16}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="4" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="20" ToolTip.Tip="20%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=20}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="5" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="24" ToolTip.Tip="24%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=24}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="6" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="28" ToolTip.Tip="28%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=28}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="7" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="32" ToolTip.Tip="32%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=32}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="8" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="36" ToolTip.Tip="36%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=36}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="9" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="40" ToolTip.Tip="40%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=40}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="10" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="44" ToolTip.Tip="44%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=44}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="11" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="48" ToolTip.Tip="48%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=48}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="12" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="52" ToolTip.Tip="52%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=52}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="13" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="56" ToolTip.Tip="56%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=56}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="14" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="60" ToolTip.Tip="60%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=60}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="15" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="64" ToolTip.Tip="64%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=64}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="16" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="68" ToolTip.Tip="68%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=68}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="17" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="72" ToolTip.Tip="72%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=72}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="18" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="76" ToolTip.Tip="76%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=76}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="19" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="80" ToolTip.Tip="80%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=80}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="20" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="84" ToolTip.Tip="84%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=84}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="21" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="88" ToolTip.Tip="88%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=88}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="22" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="92" ToolTip.Tip="92%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=92}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="23" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="96" ToolTip.Tip="96%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=96}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
-<Button Grid.Column="24" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="100" ToolTip.Tip="100%"><controls:ContinuousBorder Classes="quality-mark" Background="{Binding Quality, Converter={x:Static vm:QualityCellBrushConverter.Instance}, ConverterParameter=100}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="0" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="4" ToolTip.Tip="4%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=4}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="1" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="8" ToolTip.Tip="8%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=8}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="2" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="12" ToolTip.Tip="12%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=12}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="3" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="16" ToolTip.Tip="16%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=16}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="4" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="20" ToolTip.Tip="20%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=20}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="5" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="24" ToolTip.Tip="24%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=24}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="6" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="28" ToolTip.Tip="28%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=28}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="7" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="32" ToolTip.Tip="32%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=32}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="8" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="36" ToolTip.Tip="36%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=36}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="9" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="40" ToolTip.Tip="40%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=40}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="10" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="44" ToolTip.Tip="44%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=44}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="11" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="48" ToolTip.Tip="48%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=48}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="12" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="52" ToolTip.Tip="52%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=52}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="13" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="56" ToolTip.Tip="56%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=56}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="14" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="60" ToolTip.Tip="60%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=60}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="15" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="64" ToolTip.Tip="64%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=64}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="16" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="68" ToolTip.Tip="68%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=68}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="17" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="72" ToolTip.Tip="72%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=72}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="18" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="76" ToolTip.Tip="76%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=76}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="19" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="80" ToolTip.Tip="80%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=80}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="20" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="84" ToolTip.Tip="84%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=84}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="21" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="88" ToolTip.Tip="88%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=88}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="22" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="92" ToolTip.Tip="92%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=92}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="23" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="96" ToolTip.Tip="96%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=96}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
+<Button Grid.Column="24" Classes="qcell" Command="{Binding SetQualityCommand}" CommandParameter="100" ToolTip.Tip="100%"><controls:ContinuousBorder Classes="quality-mark" Classes.filled="{Binding Quality, Converter={x:Static vm:QualityCellIsFilledConverter.Instance}, ConverterParameter=100}" CornerRadius="2" Height="{StaticResource Control.QualityMarkHeight}" VerticalAlignment="Center"/></Button>
                                                             </Grid>
                                                         <controls:ContinuousBorder Grid.Column="1" Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}"
                                                             Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
@@ -810,7 +822,7 @@
                             </controls:ContinuousBorder>
                             <controls:ContinuousBorder Margin="0,0,0,8" Padding="12,10"
                                 IsVisible="{Binding !IsViewSetting}" CornerRadius="{StaticResource Radius.Md}"
-                                Background="{StaticResource Brush.StatusSurface}" BorderBrush="{StaticResource Brush.StatusBorder}" BorderThickness="1">
+                                Background="{DynamicResource Brush.SegmentHover}" BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}" BorderThickness="1">
                                 <StackPanel Spacing="4">
                                     <Grid ColumnDefinitions="*,Auto">
                                         <TextBlock Text="任务状态" FontWeight="SemiBold"/>
@@ -855,8 +867,8 @@
                                         <Binding ElementName="SettingsScrollViewer" Path="Viewport.Width"/>
                                     </MultiBinding>
                                 </StackPanel.Margin>
-                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowUiWindowCard}">
-                                    <TextBlock Classes="settings-group-label" Text="外观与窗口"/>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowAppearanceCard}">
+                                    <TextBlock Classes="settings-group-label" Text="外观"/>
                                     <controls:ContinuousBorder Classes="settings-section">
                                         <StackPanel>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowThemeSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -881,7 +893,59 @@
                                                     </controls:SegmentPanel>
                                                 </controls:AnimatedSegmentTrack>
                                             </Grid>
-                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowThemeTrayLine}"/>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowThemeHighlightLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowHighlightSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="导出高亮" Classes="setting-label" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Classes="secondary settings-directory-action"
+                                                        Content="{Binding ExportHighlightEditorLabel}" Command="{Binding ToggleExportHighlightEditorCommand}"
+                                                        AutomationProperties.Name="自定义导出高亮颜色"/>
+                                            </Grid>
+                                            <Panel IsVisible="{Binding ShowHighlightSetting}">
+                                                <StackPanel Margin="0,0,0,8" Spacing="{StaticResource Space.Sm}"
+                                                            IsVisible="{Binding IsExportHighlightEditorOpen}">
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding HighlightEditorMode}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SelectHighlightEditorModeCommand}" CommandParameter="{x:Static models:ExportMode.QuickExport}" AutomationProperties.Name="快速导出">
+                                                                <TextBlock Text="快速" Classes="mode-label" Foreground="{Binding HighlightEditorMode, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:ExportMode.QuickExport}}"/>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SelectHighlightEditorModeCommand}" CommandParameter="{x:Static models:ExportMode.AllArtboards}" AutomationProperties.Name="画板导出">
+                                                                <TextBlock Text="画板" Classes="mode-label" Foreground="{Binding HighlightEditorMode, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:ExportMode.AllArtboards}}"/>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SelectHighlightEditorModeCommand}" CommandParameter="{x:Static models:ExportMode.Layers}" AutomationProperties.Name="图层导出">
+                                                                <TextBlock Text="图层" Classes="mode-label" Foreground="{Binding HighlightEditorMode, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:ExportMode.Layers}}"/>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SelectHighlightEditorModeCommand}" CommandParameter="{x:Static models:ExportMode.Slices}" AutomationProperties.Name="切片导出">
+                                                                <TextBlock Text="切片" Classes="mode-label" Foreground="{Binding HighlightEditorMode, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:ExportMode.Slices}}"/>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Classes="settings-caption" Text="{Binding EditedExportHighlight.Name}"/>
+                                                        <TextBlock Grid.Column="1" Classes="settings-caption" Text="{Binding EditedExportHighlight.Selected.Name}"/>
+                                                    </Grid>
+                                                    <ListBox x:Name="HighlightPalette" Classes="highlight-palette" ItemsSource="{Binding EditedExportHighlight.Choices}"
+                                                             SelectedItem="{Binding EditedExportHighlight.Selected, Mode=TwoWay}"
+                                                             AutomationProperties.Name="{Binding EditedExportHighlight.Name, StringFormat='{}{0}高亮颜色'}">
+                                                        <ListBox.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <UniformGrid Rows="1"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ListBox.ItemsPanel>
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:ExportHighlightChoice">
+                                                                <controls:ContinuousBorder Classes="highlight-swatch" Background="{Binding Swatch}"/>
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+                                                </StackPanel>
+                                            </Panel>
+                                        </StackPanel>
+                                    </controls:ContinuousBorder>
+                                </StackPanel>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowWindowCard}">
+                                    <TextBlock Classes="settings-group-label" Text="窗口"/>
+                                    <controls:ContinuousBorder Classes="settings-section">
+                                        <StackPanel>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowTraySetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <TextBlock Text="关闭后常驻后台" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="关闭按钮收起到托盘；在托盘右键菜单中选择退出。"/>
                                                 <Panel Grid.Column="1">
@@ -943,6 +1007,54 @@
                                                         </Button>
                                                     </controls:SegmentPanel>
                                                 </controls:AnimatedSegmentTrack>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDelayHotkeyLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowHotkeySetting}" ColumnDefinitions="*,148" ColumnSpacing="12">
+                                                <TextBlock Text="唤起热键" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="不在前台时也能用组合键唤回主窗口。字母、数字、小键盘数字要搭配修饰键；F1–F12 可以单用，但该键在其他程序里会交给 PSexp。"/>
+                                                <Button Grid.Column="1" Classes="secondary settings-directory-action" Content="{Binding SummonHotkeyDisplay}"
+                                                    MinWidth="0" Padding="1,0" FontSize="{StaticResource FontSize.Caption}"
+                                                    Click="OnSummonHotkeyClick" LostFocus="OnSummonHotkeyLostFocus" ToolTip.Tip="点击后按下新组合键；退格清空即关闭；Esc 或再次点击取消。"
+                                                    AutomationProperties.Name="唤起热键组合键"/>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowHotkeyPointerLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowPointerSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="唤起跟随鼠标" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="开启后唤回主窗口时，窗口出现在鼠标旁边；关闭时回到上次记住的位置。"/>
+                                                <Panel Grid.Column="1">
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding SummonAtPointer}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetSummonAtPointerCommand}" CommandParameter="False" AutomationProperties.Name="唤起跟随鼠标：关闭">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding SummonAtPointer, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SetSummonAtPointerCommand}" CommandParameter="True" AutomationProperties.Name="唤起跟随鼠标：开启">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding SummonAtPointer, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </Panel>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowPointerStartupLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowStartupSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="开机静默启动" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="登录 Windows 后在托盘运行。可用托盘图标或热键打开主窗口。"/>
+                                                <Panel Grid.Column="1">
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding SilentStartupEnabled}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetSilentStartupCommand}" CommandParameter="False" AutomationProperties.Name="开机静默启动：关闭">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding SilentStartupEnabled, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SetSilentStartupCommand}" CommandParameter="True" AutomationProperties.Name="开机静默启动：开启">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding SilentStartupEnabled, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </Panel>
                                             </Grid>
                                         </StackPanel>
                                     </controls:ContinuousBorder>
@@ -1102,7 +1214,7 @@
                                             </Grid>
                                             <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowCheckDownloadLine}"/>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowDownloadSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="后台下载" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="下载并校验后，由你确认重启安装。"/>
+                                                <TextBlock Text="后台下载" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="发现新版本后提前下载并校验更新包。只有你确认后才会重启安装。"/>
                                                 <Panel Grid.Column="1">
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding AutoDownloadUpdates}">
                                                         <controls:SegmentPanel>
@@ -1210,6 +1322,7 @@
                                 </StackPanel>
                             </Button>
                             <Button x:Name="StartExportButton" Classes="primary"
+                                    Background="{Binding CurrentExportHighlight.Fill}"
                                     Command="{Binding StartExportCommand}"
                                     ToolTip.Tip="开始导出（Enter）"
                                     AutomationProperties.AcceleratorKey="Enter"

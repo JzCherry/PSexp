@@ -12,7 +12,7 @@ public static class UxpTaskWatcher
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static async Task<PsBridgeResult> WaitForCompletionAsync(
-        string resultPath, string exportPath, Action<string, int>? onProgress = null,
+        string resultPath, string? exportPath, Action<string, int>? onProgress = null,
         CancellationToken ct = default, int timeoutMs = DefaultTimeoutMs,
         ExportDirectorySnapshot? backgroundSnapshot = null, int? expectedFileCount = null,
         Action<string>? onBackgroundSubmitted = null)
@@ -42,23 +42,24 @@ public static class UxpTaskWatcher
                     && (name.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
                         || name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-                files = validNames.Select(name => Path.Combine(exportPath, name)).Where(File.Exists).ToArray();
+                files = exportPath is null ? [] : validNames.Select(name => Path.Combine(exportPath, name)).Where(File.Exists).ToArray();
                 foreach (var file in files)
                     if (reported.Add(file)) onProgress?.Invoke(Path.GetFileName(file), reported.Count);
                 if (status.Done)
                 {
-                    if (status.Success && status.BackgroundExport)
+                    if (status.Success && status.BackgroundExport && exportPath is not null)
                     {
                         onBackgroundSubmitted?.Invoke(json);
                         return await WaitForBackgroundFilesAsync(status, json, exportPath, backgroundSnapshot,
                             expectedFileCount, onProgress, ct, Math.Max(1, timeoutMs - (int)timer.ElapsedMilliseconds));
                     }
-                    var success = status.Success && files.Count > 0 && files.Count == names.Count;
+                    var success = status.Success && (exportPath is null || files.Count > 0 && files.Count == names.Count);
                     return new PsBridgeResult
                     {
                         Success = success, ReturnValue = json, OutputFiles = files, ExportedCount = files.Count,
                         Error = success ? null : new IOException(string.IsNullOrWhiteSpace(status.Error)
-                            ? "UXP 导出未完成或输出文件缺失" : status.Error)
+                            ? (exportPath is null ? "Photoshop 未确认操作完成" : "UXP 导出未完成或输出文件缺失")
+                            : status.Error)
                     };
                 }
             }
@@ -69,7 +70,9 @@ public static class UxpTaskWatcher
         return new PsBridgeResult
         {
             Success = false, OutputFiles = files, ExportedCount = files.Count,
-            Error = new TimeoutException("等待 UXP 导出回执超时；Photoshop 可能仍在执行，已保留输出和任务记录：" + resultPath)
+            Error = new TimeoutException((exportPath is null
+                ? "等待 Photoshop 操作回执超时，Photoshop 可能仍在执行。任务记录："
+                : "等待 UXP 导出回执超时；Photoshop 可能仍在执行，已保留输出和任务记录：") + resultPath)
         };
     }
 

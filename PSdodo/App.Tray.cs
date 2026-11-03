@@ -33,7 +33,7 @@ public partial class App
         try
         {
             var menu = new NativeMenu();
-            menu.Add(new NativeMenuItem("显示主窗口") { Command = new RelayCommand(window.ActivateFromExternalRequest) });
+            menu.Add(new NativeMenuItem("显示主窗口") { Command = new RelayCommand(() => window.ActivateFromExternalRequest()) });
             _trayQuickExport = new NativeMenuItem("快速导出当前画布") { Command = new RelayCommand(QuickExportFromTray) };
             menu.Add(_trayQuickExport);
             menu.Add(new NativeMenuItemSeparator());

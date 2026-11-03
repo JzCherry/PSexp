@@ -23,6 +23,7 @@ public sealed class AppSettings
     public int DefaultQuality { get; set; } = 80;
 
     public bool DefaultAutoRename { get; set; } = true;
+    public bool SaveAndCloseAfterExport { get; set; }
 
     /// <summary>切片文件名前缀，可为空；清空后仍持久保存为空。</summary>
     public string SliceFilePrefix { get; set; } = string.Empty;
@@ -55,6 +56,7 @@ public sealed class AppSettings
 
     /// <summary>应用主题</summary>
     public AppThemeMode ThemeMode { get; set; } = AppThemeMode.Light;
+    public Dictionary<ExportMode, ExportHighlight> ExportHighlights { get; set; } = [];
 
     /// <summary>启动后保持窗口置顶</summary>
     public bool StartAlwaysOnTop { get; set; }
@@ -73,6 +75,14 @@ public sealed class AppSettings
     public int ExportNoticeDurationSeconds { get; set; } = DefaultExportNoticeDurationSeconds;
     public ExportNoticeTarget ExportNoticeTarget { get; set; }
     public int DockRetractDelayMs { get; set; } = 420;
+
+    /// <summary>系统级唤起热键的默认组合；空串表示不注册热键。</summary>
+    public const string DefaultSummonHotkey = "Ctrl+Alt+E";
+
+    public string SummonHotkey { get; set; } = DefaultSummonHotkey;
+
+    /// <summary>唤回主窗口时把窗口放到鼠标旁边，而不是回到上次记住的位置。</summary>
+    public bool SummonAtPointer { get; set; }
 
     public WindowPlacementState? WindowPlacement { get; set; }
 

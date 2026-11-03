@@ -172,4 +172,5 @@ public sealed class RejectExporter : IExportService
     public Task<PsBridgeResult> ExportSelectedArtboardsAsync(ExportSettings s, ExportProgressHandler? p = null, CancellationToken ct = default) => Reject();
     public Task<PsBridgeResult> ExportLayersAsync(ExportSettings s, ExportProgressHandler? p = null, CancellationToken ct = default) => Reject();
     public Task<PsBridgeResult> ExportSlicesAsync(ExportSettings s, ExportProgressHandler? p = null, CancellationToken ct = default) => Reject();
+    public Task<PsBridgeResult> SaveAndCloseDocumentAsync(int documentId, string documentPath) => Reject();
 }

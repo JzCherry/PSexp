@@ -183,6 +183,30 @@ public sealed class ExportService : IExportService
     public Task<PsBridgeResult> ExportSlicesAsync(ExportSettings s, ExportProgressHandler? onProgress = null, CancellationToken ct = default)
         => ExportLayerBatchAsync(CloneWithExportPath(s, ResolveSliceExportPath(s)), sliceMode: true, onProgress, ct);
 
+    public async Task<PsBridgeResult> SaveAndCloseDocumentAsync(int documentId, string documentPath)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "PSexp", "tasks", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var script = ScriptParameterInjector.Inject(ScriptLibrary.GetScript("export/save_and_close"), new Dictionary<string, string>
+        {
+            ["RESULT_FOLDER_URL"] = ScriptParameterInjector.EscapeJsString(ToUxpFolderUrl(directory)),
+            ["DOCUMENT_ID"] = documentId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["DOCUMENT_PATH"] = ScriptParameterInjector.EscapeJsString(documentPath)
+        });
+        var dispatched = await _uxpBridge.ExecuteAsync(script, CancellationToken.None);
+        if (!dispatched.Success)
+            return PsBridgeResult.Failed(dispatched.Error ?? new IOException("保存并关闭脚本未启动"));
+        var result = await UxpTaskWatcher.WaitForCompletionAsync(Path.Combine(directory, "result.json"), exportPath: null);
+        if (result.Success)
+        {
+            await _uxpBridge.CleanupTempFileAsync(dispatched.TempFilePath);
+            try { Directory.Delete(directory, recursive: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return result;
+    }
+
     public static string ResolveSliceExportPath(ExportSettings settings)
     {
         var name = (settings.SliceFolderName ?? string.Empty).Trim();

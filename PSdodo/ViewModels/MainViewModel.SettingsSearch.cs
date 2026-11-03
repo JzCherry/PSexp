@@ -11,9 +11,13 @@ public partial class MainViewModel
     private static readonly SettingsSearchEntry[] SettingsSearchEntries =
     [
         new("Theme", "界面 外观 主题 配色 颜色 跟随系统 浅色 深色 黑暗 白色 theme appearance light dark system"),
+        new("Highlight", "外观 导出高亮 主题色 强调色 配色 颜色 快速导出 画板导出 图层导出 切片导出 highlight accent color"),
         new("Tray", "窗口 关闭后常驻后台 常驻 托盘 隐藏 后台运行 退出 close tray background"),
         new("Edge", "窗口 贴边收纳 屏幕边缘 悬浮入口 自动隐藏 展开 吸附 dock edge"),
         new("Delay", "窗口 贴边收纳 收回等待 延时 延迟 快速 标准 从容 250 420 800 毫秒 delay"),
+        new("Hotkey", "窗口 唤起 热键 快捷键 全局 组合键 前台 弹出 面板 按键  summon hotkey shortcut key"),
+        new("Pointer", "窗口 唤起 跟随 鼠标 光标 旁边 出现 位置 移动 pointer mouse cursor follow"),
+        new("Startup", "开机 静默 启动 登录 自启 后台 托盘 startup login"),
         new("Sync", "Photoshop PS 联动 自动同步 文档识别 读取 置顶 焦点 刷新 document refresh sync"),
         new("Automation", "外部调用 脚本指令 导出指令 导出命令 当前界面 当前参数 当前预设 命令行 自动化 Quicker Windows 运行 PowerShell automation command"),
         new("TempDestination", "导出位置 Temp兼容 临时文件 临时文档 导出到桌面 文档位置"),
@@ -34,9 +38,14 @@ public partial class MainViewModel
     public string SettingsSearchSummary => IsSearchingSettings ? $"找到 {_matchingSettings.Count} 项" : "";
 
     public bool ShowThemeSetting => _matchingSettings.Contains("Theme");
+    public bool ShowHighlightSetting => _matchingSettings.Contains("Highlight");
+    public bool ShowThemeHighlightLine => ShowThemeSetting && ShowHighlightSetting;
     public bool ShowTraySetting => _matchingSettings.Contains("Tray");
     public bool ShowEdgeSetting => _matchingSettings.Contains("Edge");
     public bool ShowDelaySetting => _matchingSettings.Contains("Delay");
+    public bool ShowHotkeySetting => _matchingSettings.Contains("Hotkey");
+    public bool ShowPointerSetting => _matchingSettings.Contains("Pointer");
+    public bool ShowStartupSetting => _matchingSettings.Contains("Startup");
     public bool ShowAutomationCard => _matchingSettings.Contains("Automation");
     public bool ShowTempDestinationCard => _matchingSettings.Contains("TempDestination");
     public bool ShowNoticeSetting => _matchingSettings.Contains("Notice");
@@ -52,14 +61,17 @@ public partial class MainViewModel
     public bool ShowDownloadSetting => _matchingSettings.Contains("Download");
     public bool ShowVersionCard => _matchingSettings.Contains("Version");
     // Settings groups: the card shows when any row inside it matches; each row keeps its own filter.
-    public bool ShowUiWindowCard => ShowThemeSetting || ShowTraySetting || ShowEdgeSetting || ShowDelaySetting;
+    public bool ShowAppearanceCard => ShowThemeSetting || ShowHighlightSetting;
+    public bool ShowWindowCard => ShowTraySetting || ShowEdgeSetting || ShowDelaySetting || ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting;
     public bool ShowPhotoshopCard => ShowSyncSetting;
     public bool ShowUpdateCard => ShowCheckSetting || ShowDownloadSetting || ShowVersionCard;
     public bool ShowDataCard => ShowDataSetting || ShowLogSetting;
     // A hairline only exists between two rows that are both on screen.
-    public bool ShowThemeTrayLine => ShowThemeSetting && (ShowTraySetting || ShowEdgeSetting || ShowDelaySetting);
-    public bool ShowTrayEdgeLine => ShowTraySetting && (ShowEdgeSetting || ShowDelaySetting);
-    public bool ShowEdgeDelayLine => ShowEdgeSetting && ShowDelaySetting;
+    public bool ShowTrayEdgeLine => ShowTraySetting && (ShowEdgeSetting || ShowDelaySetting || ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting);
+    public bool ShowEdgeDelayLine => ShowEdgeSetting && (ShowDelaySetting || ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting);
+    public bool ShowDelayHotkeyLine => ShowDelaySetting && (ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting);
+    public bool ShowHotkeyPointerLine => ShowHotkeySetting && (ShowPointerSetting || ShowStartupSetting);
+    public bool ShowPointerStartupLine => ShowPointerSetting && ShowStartupSetting;
     public bool ShowCheckDownloadLine => ShowCheckSetting && (ShowDownloadSetting || ShowVersionCard);
     public bool ShowDownloadVersionLine => ShowDownloadSetting && ShowVersionCard;
     public bool ShowDataLogLine => ShowDataSetting && ShowLogSetting;
@@ -76,13 +88,15 @@ public partial class MainViewModel
         foreach (var name in new[]
         {
             nameof(HasSettingsSearchText), nameof(IsSearchingSettings), nameof(HasNoSettingsSearchResults), nameof(SettingsSearchSummary),
-            nameof(ShowThemeSetting), nameof(ShowTraySetting), nameof(ShowEdgeSetting), nameof(ShowDelaySetting),
+            nameof(ShowThemeSetting), nameof(ShowHighlightSetting), nameof(ShowThemeHighlightLine),
+            nameof(ShowTraySetting), nameof(ShowEdgeSetting), nameof(ShowDelaySetting), nameof(ShowHotkeySetting),
+            nameof(ShowPointerSetting), nameof(ShowStartupSetting), nameof(ShowPointerStartupLine),
             nameof(ShowSyncSetting), nameof(ShowAutomationCard), nameof(ShowTempDestinationCard),
             nameof(ShowNoticeSetting), nameof(ShowNoticeDurationSetting), nameof(ShowNoticeTargetSetting),
             nameof(ShowNoticeCard), nameof(ShowNoticeLine), nameof(ShowNoticeDurationLine),
             nameof(ShowDataSetting), nameof(ShowLogSetting), nameof(ShowCheckSetting), nameof(ShowDownloadSetting), nameof(ShowVersionCard),
-            nameof(ShowUiWindowCard), nameof(ShowPhotoshopCard), nameof(ShowUpdateCard), nameof(ShowDataCard),
-            nameof(ShowThemeTrayLine), nameof(ShowTrayEdgeLine), nameof(ShowEdgeDelayLine),
+            nameof(ShowAppearanceCard), nameof(ShowWindowCard), nameof(ShowPhotoshopCard), nameof(ShowUpdateCard), nameof(ShowDataCard),
+            nameof(ShowTrayEdgeLine), nameof(ShowEdgeDelayLine), nameof(ShowDelayHotkeyLine), nameof(ShowHotkeyPointerLine),
             nameof(ShowCheckDownloadLine), nameof(ShowDownloadVersionLine), nameof(ShowDataLogLine)
         }) OnPropertyChanged(name);
     }

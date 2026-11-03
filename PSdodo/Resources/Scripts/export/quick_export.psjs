@@ -5,8 +5,10 @@ async function runExport() {
     const exportPath = "{{EXPORT_PATH}}";
     const format = "{{FORMAT}}".toLowerCase();
     const quality = {{QUALITY}};
+    let sourceDocument;
     await core.executeAsModal(async () => {
         const doc = app.activeDocument;
+        sourceDocument = getExportSource(doc);
         const folder = await require("uxp").storage.localFileSystem.getEntryWithUrl("file:/" + exportPath.replace(/\\/g, "/").replace(/\/$/, ""));
         const name = doc.name.replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").replace(/[. ]+$/, "") || "export";
         const entry = await folder.createFile(name + "." + format, { overwrite: true });
@@ -14,4 +16,5 @@ async function runExport() {
         else if (format === "jpg") await doc.saveAs.jpg(entry, { quality: Math.round(12 * quality / 100) }, true);
         else throw new Error("不支持的导出格式: " + format);
     }, { commandName: "Export Canvas" });
+    return { sourceDocument };
 }

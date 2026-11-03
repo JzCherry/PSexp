@@ -23,6 +23,8 @@ async function report() {
 async function exportSlices(context) {
     if (!app.documents.length) throw new Error("没有打开的文档");
     const source = app.activeDocument;
+    state.sourceDocument = { id: source.id, path: "" };
+    try { state.sourceDocument.path = String(source.path || ""); } catch (_) { /* unsaved */ }
     stage = "读取 Photoshop 原生切片";
     const response = await action.batchPlay([{
         _obj: "get", _target: [{ _property: "slices" }, { _ref: "document", _id: source.id }]

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Threading;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using PsExporter.ViewModels;
 
@@ -14,6 +15,22 @@ public partial class MainWindow
     private readonly Stopwatch _settingsPageFadeClock = new();
     private double _settingsPageFadeStart;
     private ExportCommandWindow? _exportCommandWindow;
+
+    private void OnHighlightPaletteKeyDown(object? sender, KeyEventArgs args)
+    {
+        var last = HighlightPalette.ItemCount - 1;
+        if (last < 0 || args.Key is not (Key.Left or Key.Right or Key.Home or Key.End)) return;
+        var index = args.Key switch
+        {
+            Key.Home => 0,
+            Key.End => last,
+            Key.Left => Math.Max(0, HighlightPalette.SelectedIndex - 1),
+            _ => Math.Min(last, HighlightPalette.SelectedIndex + 1)
+        };
+        HighlightPalette.SelectedIndex = index;
+        HighlightPalette.ContainerFromIndex(index)?.Focus(NavigationMethod.Directional);
+        args.Handled = true;
+    }
 
     private void OnSettingsNavigationRequested(bool updates)
     {

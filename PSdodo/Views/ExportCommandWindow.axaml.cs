@@ -389,7 +389,8 @@ public partial class ExportCommandWindow : Window
                 // 子窗居中时会遮住主窗口的进度区，试运行后先让出视野。
                 WindowState = WindowState.Minimized;
                 if (model.IsViewSetting) model.ToggleSettingsViewCommand.Execute(null);
-                mainWindow.ActivateFromExternalRequest();
+                // 这不是"把窗口叫过来"，只是让出视野：主窗口原位不动，不能被搬去鼠标旁。
+                mainWindow.ActivateFromExternalRequest(keepWindowPosition: true);
             }
         }
         else ShowStatus("未开始：主界面正忙，或这条指令的预设已不存在。", true);

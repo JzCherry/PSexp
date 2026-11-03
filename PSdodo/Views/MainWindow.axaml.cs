@@ -106,6 +106,11 @@ public partial class MainWindow : Window
     {
         // 只约束本窗口动画期间的鼠标激活，不安装全局键鼠钩子。
         if (msg == 0x0021 && _isSnapAnimating) return new IntPtr(3); // WM_MOUSEACTIVATE / MA_NOACTIVATE
+        if (msg == SummonHotkeyMessage)
+        {
+            OnSummonHotkeyMessage();
+            return IntPtr.Zero;
+        }
         if (msg == 0x0112 && (wParam.ToInt64() & 0xFFF0) == 0xF020
             && TryQueueDockRetraction("native-system-minimize")) return IntPtr.Zero;
         if (msg == WM_ENTERSIZEMOVE)
@@ -183,8 +188,6 @@ public partial class MainWindow : Window
         _edgeHoverTimer.Tick += OnEdgeHoverTimerTick;
 
         Opened += OnWindowOpened;
-        Opened += async (_, _) => { if (DataContext is MainViewModel model) await model.InitializeUpdatesAsync(); };
-        Closed += (_, _) => { if (DataContext is MainViewModel model) model.StopUpdateChecks(); };
         Activated += OnWindowActivated;
         Deactivated += OnWindowDeactivated;
         PropertyChanged += OnDockWindowPropertyChanged;
@@ -194,6 +197,7 @@ public partial class MainWindow : Window
         Closed += OnWindowClosed;
         Screens.Changed += OnScreensChanged;
         DataContextChanged += OnAnimationDataContextChanged;
+        ActualThemeVariantChanged += (_, _) => ApplyExportHighlight();
         AttachAnimationViewModel(DataContext as MainViewModel);
         AttachQualityMeterPointerHandlers();
         QualityMeter.RenderTransform = _qualityFeedbackScale;
@@ -203,6 +207,9 @@ public partial class MainWindow : Window
             OnWindowPointerPressed,
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
+        // 抓取热键要先于下面的 Esc 阶梯与导出快捷键，否则组合键会被既有动作吃掉。
+        AddHandler(KeyDownEvent, OnSummonHotkeyCaptureKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+        HighlightPalette.AddHandler(KeyDownEvent, OnHighlightPaletteKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, (_, args) =>
         {
             if (args.Handled || args.Key != Key.Escape) return;
@@ -211,8 +218,10 @@ public partial class MainWindow : Window
             if (DismissTextInputMenu()) { args.Handled = true; return; }
             if (DataContext is MainViewModel { IsViewSetting: true } settingsModel)
             {
-                if (SettingsSearchInput.IsFocused && settingsModel.HasSettingsSearchText)
-                { settingsModel.ClearSettingsSearchCommand.Execute(null); args.Handled = true; }
+                if (IsPopupInputSource(args.Source)) return;
+                settingsModel.ToggleSettingsViewCommand.Execute(null);
+                SettingsToggleButton.Focus();
+                args.Handled = true;
                 return;
             }
             if (!IsPopupInputSource(args.Source) && ExportPresets.DismissOnEscape()) args.Handled = true;
@@ -267,6 +276,7 @@ public partial class MainWindow : Window
         }
         _exportNotice?.Close();
         _animationViewModel = viewModel;
+        ApplyExportHighlight();
         if (_animationViewModel is not null)
         {
             _animationViewModel.PropertyChanged += OnAnimationViewModelPropertyChanged;
@@ -279,6 +289,8 @@ public partial class MainWindow : Window
 
     private void OnAnimationViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainViewModel.CurrentExportHighlight))
+            ApplyExportHighlight();
         if (e.PropertyName == nameof(MainViewModel.ShowExportNotice) && _animationViewModel?.ShowExportNotice == false)
             _exportNotice?.Close();
         if (e.PropertyName is nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRefreshingStatus)
@@ -453,6 +465,7 @@ public partial class MainWindow : Window
         CloseDockIcon();
         ClearDockRevealBitmap();
         _dockIconWindow?.Close();
+        DetachSummonHotkey();
         UninstallWndProcSubclass();
         Deactivated -= OnWindowDeactivated;
         PropertyChanged -= OnDockWindowPropertyChanged;
@@ -737,6 +750,7 @@ public partial class MainWindow : Window
         Opacity = 1.0;
         _isDocked = false;
         _isDockRevealed = false;
+        _dockRevealedByHotkey = false;
         _dockedEdge = DockEdge.None;
         if (DataContext is MainViewModel vm)
         {
@@ -841,8 +855,7 @@ public partial class MainWindow : Window
         // 此时窗口已关联实际显示器，避免初始化阶段按错误屏幕写入过小 MaxWidth。
         RestoreSavedWindowSize();
         UpdateStatusAnimationState(restartActiveClocks: true);
-        // 窗口已关联实际句柄，安装子类化拦截 WM_EXITSIZEMOVE
-        InstallWndProcSubclass();
+        InitializeSummonHotkey();
         Dispatcher.UIThread.Post(CompleteSavedPlacementRestore, DispatcherPriority.Loaded);
     }
 
@@ -1060,7 +1073,7 @@ public partial class MainWindow : Window
         for (var visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
         {
             if (visual is Button or TextBox or ScrollBar or Thumb or Slider or ComboBox or NumericUpDown
-                or ToggleSwitch or CheckBox or ListBox or AnimatedSegmentTrack) return;
+                or ToggleSwitch or CheckBox or ListBox or ComboBox or AnimatedSegmentTrack) return;
             if (visual is Control { Name: "QualityMeter" }) return;
         }
         // 空白处交给系统区分单击与移动，Windows 确认实际移动后才解除贴边。
@@ -1091,30 +1104,33 @@ public partial class MainWindow : Window
         return false;
     }
 
-    public void ActivateFromExternalRequest()
+    public void ActivateFromExternalRequest(bool keepWindowPosition = false)
     {
         if (_isRestoringPlacement)
         {
-            _activateAfterPlacementRestore = true;
+            ActivateAfterPlacementRestore(() => ActivateFromExternalRequest(keepWindowPosition: true));
             return;
         }
         _isHiddenToTray = false;
         if (_isDocked) BeginUndockForDrag();
         var wasMinimized = WindowState == WindowState.Minimized;
+        // 位置要在这次显示之前定好，窗口只能落位一次；启动恢复那条路径不移动窗口。
+        if (wasMinimized) WindowState = WindowState.Normal;
+        if (!keepWindowPosition) MoveBesidePointer();
         if (!IsVisible)
             Show();
-        if (wasMinimized)
-            WindowState = WindowState.Normal;
-
         UpdateStatusAnimationState(restartActiveClocks: false);
         PersistWindowPlacement();
+        BringToForeground();
+    }
+
+    private void BringToForeground()
+    {
         Activate();
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
         var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (handle == IntPtr.Zero) return;
-        if (wasMinimized)
-            _ = ShowWindow(handle, 9); // SW_RESTORE
         _ = SetForegroundWindow(handle);
     }
 

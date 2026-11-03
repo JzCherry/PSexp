@@ -99,6 +99,7 @@ public partial class MainViewModel
     partial void OnQualityChanged(int value) => QueueParameterMemory();
     partial void OnIsViewSettingChanged(bool value)
     {
+        if (!value) IsExportHighlightEditorOpen = false;
         OnPropertyChanged(nameof(CanOpenOrCloseSettings));
         OnPropertyChanged(nameof(SettingsToggleHint));
         QueueParameterMemory();

@@ -105,6 +105,8 @@ async function exportAssets(context, source, sourceNodes, targets, saveTarget) {
 async function exportBatch(executionContext) {
     if (app.documents.length === 0) throw new Error("没有打开的文档");
     const doc = app.activeDocument;
+    state.sourceDocument = { id: doc.id, path: "" };
+    try { state.sourceDocument.path = String(doc.path || ""); } catch (_) { /* unsaved */ }
     const { nodes, targets, warning } = resolveLayerExportTargets(doc, !recursive, selectedOnly);
     state.warning = warning;
     const layers = nodes.map(node => node.layer);

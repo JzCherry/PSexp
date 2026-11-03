@@ -51,24 +51,15 @@ public sealed class EqualsToTextBrushConverter : IValueConverter
 }
 
 /// <summary>
-/// Returns a filled gradient brush when Quality >= cell threshold, otherwise a light empty brush.
-/// Used for the notched quality cell meter design.
+/// Marks the quality cells up to the current value.
 /// </summary>
-public sealed class QualityCellBrushConverter : IValueConverter
+public sealed class QualityCellIsFilledConverter : IValueConverter
 {
-    public static readonly QualityCellBrushConverter Instance = new();
+    public static readonly QualityCellIsFilledConverter Instance = new();
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is int quality && parameter is string str && int.TryParse(str, out int cellValue))
-        {
-            return quality >= cellValue
-                ? DesignBrushResolver.Get("Brush.Accent")
-                : DesignBrushResolver.Get("Brush.Border");
-        }
-
-        return DesignBrushResolver.Get("Brush.Border");
-    }
+        => value is int quality && parameter is string str && int.TryParse(str, out var threshold)
+            && quality >= threshold;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PsExporter.Models;
+using PsExporter.Services;
 
 namespace PsExporter.ViewModels;
 
@@ -38,6 +39,56 @@ public partial class MainViewModel
         SaveBehaviorSettings();
     }
     [RelayCommand] private void SetCloseToTray(object? value) => CloseToTray = ParseBooleanCommandParameter(value);
+
+    [ObservableProperty] private bool _silentStartupEnabled;
+
+    private void ReadSilentStartup()
+    {
+        try { SilentStartupEnabled = WindowsStartup.IsEnabled(); }
+        catch (Exception error) { _fileLogger.Error("读取开机启动失败：" + error); }
+    }
+
+    [RelayCommand]
+    private void SetSilentStartup(object? value)
+    {
+        var enabled = ParseBooleanCommandParameter(value);
+        try
+        {
+            WindowsStartup.SetEnabled(enabled);
+            SilentStartupEnabled = enabled;
+            SettingsStatusText = enabled ? "已开启开机静默启动" : "已关闭开机静默启动";
+        }
+        catch (Exception error)
+        {
+            SettingsStatusText = "无法更改开机启动：" + error.Message;
+            _fileLogger.Error("设置开机启动失败：" + error);
+        }
+    }
+
+    // ---------- 全局唤起热键 ----------
+    [ObservableProperty] private string _summonHotkey = AppSettings.DefaultSummonHotkey;
+    [ObservableProperty] private bool _isSummonHotkeyCapturing;
+    [ObservableProperty] private bool _summonAtPointer;
+
+    /// <summary>窗口层订阅后重新注册系统热键；设置项本身只负责落盘与显示。</summary>
+    public event Action? SummonHotkeyRegistrationRequested;
+
+    /// <summary>空组合键就是关闭：不注册任何系统热键，界面上显示「未设置」。</summary>
+    public string SummonHotkeyDisplay => IsSummonHotkeyCapturing ? "按键…"
+        : SummonHotkey.Length == 0 ? "未设置" : SummonHotkey;
+
+    partial void OnSummonHotkeyChanged(string value)
+    {
+        OnPropertyChanged(nameof(SummonHotkeyDisplay));
+        SaveBehaviorSettings();
+        SummonHotkeyRegistrationRequested?.Invoke();
+    }
+
+    partial void OnIsSummonHotkeyCapturingChanged(bool value) => OnPropertyChanged(nameof(SummonHotkeyDisplay));
+
+    partial void OnSummonAtPointerChanged(bool value) => SaveBehaviorSettings();
+
+    [RelayCommand] private void SetSummonAtPointer(object? value) => SummonAtPointer = ParseBooleanCommandParameter(value);
 
     public string LogFilePath => _fileLogger.LogPath;
     [RelayCommand] private void OpenLogDirectory()

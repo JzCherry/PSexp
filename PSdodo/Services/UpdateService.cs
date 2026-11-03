@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -140,10 +141,18 @@ public sealed class UpdateService(FileLogger logger)
         if (!IsSingleFileInstallation) throw new IOException("目录开发版请使用编译脚本更新；自动更新仅适用于发布版单文件 EXE");
         if (info.RequiresDotNet && !HasSharedRuntime()) throw new IOException("新版需要 .NET 10 x64 Runtime，请先安装运行时再更新");
         var target = Path.GetFullPath(Environment.ProcessPath!);
+        var destination = Regex.IsMatch(Path.GetFileName(target), @"^PSexp v\d+\.\d+(\.\d+)?\.exe$", RegexOptions.IgnoreCase)
+            ? Path.Combine(Path.GetDirectoryName(target)!, $"PSexp v{Version.Parse(info.Version).ToString(3)}.exe")
+            : target;
         var script = Path.Combine(Path.GetDirectoryName(downloadedPath)!, "install.ps1");
         var dataPath = Path.Combine(Path.GetDirectoryName(downloadedPath)!, "install.json");
-        File.WriteAllText(dataPath, JsonSerializer.Serialize(new { Target = target, Source = downloadedPath,
-            Sha256 = info.Sha256, Pid = Environment.ProcessId, Log = logger.LogPath }), new UTF8Encoding(false));
+        File.WriteAllText(dataPath, JsonSerializer.Serialize(new
+        {
+            Target = target, Destination = destination, Source = downloadedPath,
+            Sha256 = info.Sha256, Pid = Environment.ProcessId, Log = logger.LogPath,
+            StartupKey = @"HKCU:\" + WindowsStartup.RunKey, StartupName = WindowsStartup.ValueName,
+            OldStartupCommand = WindowsStartup.CommandFor(target), NewStartupCommand = WindowsStartup.CommandFor(destination)
+        }), new UTF8Encoding(false));
         File.WriteAllText(script, InstallerScript, new UTF8Encoding(true));
         var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(target)! };
@@ -172,6 +181,10 @@ $data=Get-Content -Raw -Encoding UTF8 -LiteralPath $DataFile | ConvertFrom-Json
 $next=$data.Target+'.'+[guid]::NewGuid().ToString('N')+'.new'
 $backup=$data.Target+'.'+[guid]::NewGuid().ToString('N')+'.bak'
 $replaced=$false
+$launch=$data.Target
+$createdDestination=$false
+$renamed=$false
+$startupChanged=$false
 function Write-UpdateLog([string]$message) {
     try { Add-Content -LiteralPath $data.Log -Value ('['+(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff')+'] [UpdateInstaller] '+$message) -Encoding UTF8 } catch { }
 }
@@ -185,12 +198,46 @@ try {
         try { [IO.File]::Replace($next,$data.Target,$backup);$replaced=$true;break }
         catch { if($attempt -eq 29){throw};Start-Sleep -Milliseconds 500 }
     }
-    Write-UpdateLog ('Update installed. Rollback copy: '+$backup)
-    Start-Process -FilePath $data.Target -WorkingDirectory (Split-Path -Parent $data.Target) -WindowStyle Normal
+    if($data.Destination -ne $data.Target) {
+        if(-not (Test-Path -LiteralPath $data.Destination)) {
+            [IO.File]::Move($data.Target,$data.Destination)
+            $createdDestination=$true
+            $renamed=$true
+        } elseif ((Test-Path -LiteralPath $data.Destination -PathType Leaf) -and
+            (Get-FileHash -LiteralPath $data.Destination -Algorithm SHA256).Hash -eq $data.Sha256) {
+            [IO.File]::Move($data.Target,$next)
+            $renamed=$true
+        } else {
+            Write-UpdateLog ('Versioned filename already in use. Keeping '+$data.Target)
+        }
+        if($renamed) {
+            $launch=$data.Destination
+            $startup=Get-ItemProperty -LiteralPath $data.StartupKey -Name $data.StartupName -ErrorAction SilentlyContinue
+            if($null -ne $startup -and $startup.($data.StartupName) -eq $data.OldStartupCommand) {
+                Set-ItemProperty -LiteralPath $data.StartupKey -Name $data.StartupName -Value $data.NewStartupCommand
+                $startupChanged=$true
+            }
+        }
+    }
+    Start-Process -FilePath $launch -WorkingDirectory (Split-Path -Parent $launch) -WindowStyle Normal
+    Write-UpdateLog ('Update installed. Executable: '+$launch+'; rollback copy: '+$backup)
 } catch {
     Write-UpdateLog ('Update failed: '+$_)
     if($replaced -and (Test-Path -LiteralPath $backup)) {
-        try { [IO.File]::Replace($backup,$data.Target,$null);Write-UpdateLog 'Previous EXE restored.' } catch { Write-UpdateLog ('Rollback failed: '+$_) }
+        try {
+            if($renamed) { [IO.File]::Move($backup,$data.Target) }
+            else { [IO.File]::Replace($backup,$data.Target,$null) }
+            if($createdDestination) { Remove-Item -LiteralPath $data.Destination -Force }
+            Write-UpdateLog 'Previous EXE restored.'
+        } catch { Write-UpdateLog ('Rollback failed: '+$_) }
+    }
+    if($startupChanged) {
+        try {
+            $startup=Get-ItemProperty -LiteralPath $data.StartupKey -Name $data.StartupName -ErrorAction SilentlyContinue
+            if($null -ne $startup -and $startup.($data.StartupName) -eq $data.NewStartupCommand) {
+                Set-ItemProperty -LiteralPath $data.StartupKey -Name $data.StartupName -Value $data.OldStartupCommand
+            }
+        } catch { Write-UpdateLog ('Startup rollback failed: '+$_) }
     }
     try { Start-Process -FilePath $data.Target -WorkingDirectory (Split-Path -Parent $data.Target) -WindowStyle Normal } catch { Write-UpdateLog ('Restart failed: '+$_) }
 } finally {

@@ -20,4 +20,5 @@ public interface IExportService
     Task<PsBridgeResult> ExportSelectedArtboardsAsync(ExportSettings settings, ExportProgressHandler? onProgress = null, CancellationToken ct = default);
     Task<PsBridgeResult> ExportLayersAsync(ExportSettings settings, ExportProgressHandler? onProgress = null, CancellationToken ct = default);
     Task<PsBridgeResult> ExportSlicesAsync(ExportSettings settings, ExportProgressHandler? onProgress = null, CancellationToken ct = default);
+    Task<PsBridgeResult> SaveAndCloseDocumentAsync(int documentId, string documentPath);
 }

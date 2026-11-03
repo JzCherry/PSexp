@@ -4,6 +4,7 @@ using Avalonia;
 using PsExporter.Core.Automation;
 using PsExporter.Core.PsConnection;
 using PsExporter.Core.Scripting;
+using PsExporter.Services;
 
 namespace PsExporter;
 
@@ -34,6 +35,8 @@ class Program
         // Match normal Photoshop permissions before creating the singleton or any window/animation state.
         if (WindowsProcessPermissions.TryRelaunchForPhotoshop(args)) return;
         args = Array.FindAll(args, argument => argument != WindowsProcessPermissions.RelaunchArgument);
+        var silentStartup = args is [WindowsStartup.Argument];
+        if (silentStartup) args = [];
 
         if (!ExportInvocation.TryParse(args, out var invocation))
         {
@@ -44,6 +47,7 @@ class Program
         using var singleInstance = new SingleInstanceCoordinator(InstanceName);
         if (!singleInstance.IsPrimary)
         {
+            if (silentStartup) return;
             if (invocation is null) singleInstance.SignalPrimary();
             else if (!ExportCommandPipe.SendAsync(ExportPipeName, args).GetAwaiter().GetResult())
                 Environment.ExitCode = 3;
@@ -52,6 +56,7 @@ class Program
 
         App.SingleInstance = singleInstance;
         App.StartupExport = invocation;
+        App.SilentStartup = silentStartup;
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime([]);

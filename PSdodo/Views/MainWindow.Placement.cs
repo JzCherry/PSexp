@@ -16,7 +16,7 @@ public partial class MainWindow
     private bool _placementRestorationCompleted;
     private bool _isRestoringPlacement;
     private bool _isHiddenToTray;
-    private bool _activateAfterPlacementRestore;
+    private Action? _activateAfterPlacementRestore;
     private bool _restoreDocked;
     private PixelPoint _restoredNormalPosition;
     private DockEdge _restoredEdge;
@@ -159,11 +159,46 @@ public partial class MainWindow
         UpdateStatusAnimationState(restartActiveClocks: true);
         PersistWindowPlacement();
         QueueForegroundDocumentProbe();
-        if (_activateAfterPlacementRestore)
+        var activate = _activateAfterPlacementRestore;
+        _activateAfterPlacementRestore = null;
+        activate?.Invoke();
+    }
+
+    private void ActivateAfterPlacementRestore(Action activate)
+    {
+        _activateAfterPlacementRestore = activate;
+        if (!IsVisible)
         {
-            _activateAfterPlacementRestore = false;
-            ActivateFromExternalRequest();
+            _isHiddenToTray = false;
+            Show();
         }
+    }
+
+    internal void StartHiddenToTray()
+    {
+        _isHiddenToTray = true;
+        InitializeSummonHotkey();
+    }
+
+    /// <summary>
+    /// 「唤起跟随鼠标」打开时，把窗口搬到光标所在屏的光标旁边。
+    /// 必须在 Show/Activate 之前调用，窗口才会一次落位，不会先出现再跳。
+    /// </summary>
+    private void MoveBesidePointer()
+    {
+        if (DataContext is not MainViewModel { SummonAtPointer: true } model) return;
+        if (!GetCursorPos(out var nativeCursor)) return;
+        var cursor = new PixelPoint(nativeCursor.X, nativeCursor.Y);
+        var screen = Screens.ScreenFromPoint(cursor) ?? Screens.Primary;
+        if (screen is null) return;
+        var (widthDip, heightDip) = Bounds.Width > 0 && Bounds.Height > 0 ? (Bounds.Width, Bounds.Height) : model.GetSavedWindowSize();
+        if (widthDip <= 0 || heightDip <= 0) return;
+        var scaling = Math.Max(screen.Scaling, 0.1);
+        var position = SummonPlacement.Beside(cursor,
+            (int)Math.Ceiling(widthDip * scaling), (int)Math.Ceiling(heightDip * scaling),
+            screen.WorkingArea, (int)Math.Round(SummonPlacement.GapDip * scaling));
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Position = position;
     }
 
     private void PersistWindowPlacement()
@@ -200,6 +235,7 @@ public partial class MainWindow
         ClearDockRevealBitmap();
         _isDocked = false;
         _isDockRevealed = false;
+        _dockRevealedByHotkey = false;
         model.IsEdgeDocked = false;
         _placementPrepared = false;
         _placementRestorationCompleted = false;

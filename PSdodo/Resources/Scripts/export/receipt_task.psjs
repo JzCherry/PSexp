@@ -1,5 +1,10 @@
 // 快速导出等待同步 saveAs；画板/图层的原生命令只回报“已提交”，由 C# 确认后台文件完成。
 {{SCRIPT_BODY}}
+function getExportSource(doc) {
+    let path = "";
+    try { path = String(doc.path || ""); } catch (_) { /* unsaved */ }
+    return { id: doc.id, path };
+}
 const taskFs = require("uxp").storage.localFileSystem;
 const taskState = { done: false, success: false, files: [], error: "" };
 const taskFolder = await taskFs.getEntryWithUrl("{{RESULT_FOLDER_URL}}");
@@ -10,6 +15,7 @@ try {
     taskState.path = "{{EXPORT_FOLDER_URL}}";
     await taskFile.write(JSON.stringify(taskState));
     const exportResult = await runExport();
+    taskState.sourceDocument = exportResult && exportResult.sourceDocument;
     taskState.warning = exportResult && typeof exportResult.warning === "string" ? exportResult.warning : "";
     if ({{WAIT_FOR_BACKGROUND_EXPORT}}) {
         // batchPlay 返回不代表后台编码/写盘完成；此处不再以一次空枚举判失败。

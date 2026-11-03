@@ -11,6 +11,7 @@ public partial class MainViewModel
     private UpdateService? _updater;
     private UpdateManifest? _pendingUpdate;
     private string? _downloadedUpdate;
+    private string? _automaticUpdateVersion;
     private readonly CancellationTokenSource _updateLifetime = new();
     private bool _updatesStarted;
     [ObservableProperty] private bool _autoCheckForUpdates = true;
@@ -25,6 +26,10 @@ public partial class MainViewModel
     public string UpdateCurrentVersion => "当前版本：" + UpdateService.CurrentVersion;
     public string UpdateActionText => _downloadedUpdate is null ? "下载并更新" : "重启并更新";
     public bool IsUpdateAvailable => _pendingUpdate is not null;
+    internal string? AutomaticUpdateVersion => UpdateService.IsSingleFileInstallation
+        && AutoCheckForUpdates && CanApplyUpdate && _pendingUpdate?.Version == _automaticUpdateVersion
+        ? _automaticUpdateVersion : null;
+    internal bool IsUpdateDownloaded => _downloadedUpdate is not null;
     public string SettingsToggleHint => IsViewSetting ? "返回导出界面"
         : IsUpdateAvailable ? "发现新版本，进入设置更新" : "设置";
     public bool CanCheckUpdates => !IsUpdateBusy;
@@ -52,7 +57,7 @@ public partial class MainViewModel
             await Task.Delay(3000, _updateLifetime.Token);
             while (!_updateLifetime.IsCancellationRequested)
             {
-                if (AutoCheckForUpdates && !IsUpdateBusy) await CheckUpdateCoreAsync();
+                if (AutoCheckForUpdates && !IsUpdateBusy) await CheckUpdateCoreAsync(automatic: true);
                 await Task.Delay(TimeSpan.FromHours(6), _updateLifetime.Token);
             }
         }
@@ -61,7 +66,7 @@ public partial class MainViewModel
     public void StopUpdateChecks() => _updateLifetime.Cancel();
     [RelayCommand(CanExecute = nameof(CanCheckUpdates))]
     private Task CheckForUpdatesAsync() => CheckUpdateCoreAsync();
-    private async Task CheckUpdateCoreAsync()
+    private async Task CheckUpdateCoreAsync(bool automatic = false)
     {
         if (IsUpdateBusy) return;
         IsUpdateBusy = true;
@@ -74,12 +79,14 @@ public partial class MainViewModel
             {
                 _pendingUpdate = null;
                 _downloadedUpdate = null;
+                _automaticUpdateVersion = null;
                 UpdateChangelog = "";
                 UpdateStatus = "已是最新版本";
                 return;
             }
             if (_pendingUpdate?.Sha256 != info.Sha256 || !File.Exists(_downloadedUpdate)) _downloadedUpdate = null;
             _pendingUpdate = info;
+            if (automatic) _automaticUpdateVersion = info.Version;
             UpdateChangelog = info.Changelog;
             UpdateStatus = "发现新版本 v" + info.Version;
             if (AutoDownloadUpdates && UpdateService.IsSingleFileInstallation && _downloadedUpdate is null)

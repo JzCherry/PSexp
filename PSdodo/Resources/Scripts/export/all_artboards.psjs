@@ -5,6 +5,8 @@ const { app, core, action } = require("photoshop");
 const { batchPlay } = action;
 
 async function exportAllArtboards() {
+    const doc = app.activeDocument;
+    const sourceDocument = getExportSource(doc);
     const exportPath = "{{EXPORT_PATH}}";
     const format = "{{FORMAT}}".toLowerCase();
     const quality = {{QUALITY}};
@@ -12,7 +14,7 @@ async function exportAllArtboards() {
     // 在命令提交前读取本次活动文档/选择的数量，避免依赖过时的界面计数。
     let expectedFileCount = null;
     try {
-        const layers = Array.from(app.activeDocument.layers);
+        const layers = Array.from(doc.layers);
         if (layers.length) {
             const descriptors = await batchPlay(layers.map(layer => ({
                 _obj: "get", _target: [{ _ref: "layer", _id: layer.id }],
@@ -39,7 +41,7 @@ async function exportAllArtboards() {
 
     const result = await batchPlay([d], {});
     if (result.some(item => item._obj === "error")) throw new Error(result.find(item => item._obj === "error").message || "Photoshop 导出失败");
-    return { expectedFileCount };
+    return { expectedFileCount, sourceDocument };
 }
 
 async function runExport() {
