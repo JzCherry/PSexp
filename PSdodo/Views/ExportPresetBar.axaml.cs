@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -39,6 +40,25 @@ public partial class ExportPresetBar : UserControl
             model.ApplyPresetCommand.Execute(choice);
         PresetPicker.Flyout?.Hide();
     }
+    private async void OnCopyExportCommandClick(object? sender, RoutedEventArgs args)
+    {
+        if (_model is not { CurrentPresetCommandId: { } id } model
+            || Environment.ProcessPath is not { } executable
+            || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+
+        PresetMore.Flyout?.Hide();
+        try
+        {
+            static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+            await clipboard.SetTextAsync($"& {Quote(executable)} --preset-id {Quote(id)}");
+            model.PresetStatusMessage = "已复制导出指令";
+        }
+        catch (Exception)
+        {
+            model.ReportPresetError("无法复制导出指令，请重试。");
+        }
+    }
+
     private void OnMenuActionClick(object? sender, RoutedEventArgs args)
         => Dispatcher.UIThread.Post(() => PresetMore.Flyout?.Hide()); // Let the button command finish before detaching popup content.
     // Called before the window's blank-area drag handler. A dismissal click must

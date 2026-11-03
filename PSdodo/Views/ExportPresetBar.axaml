@@ -99,6 +99,7 @@
                     <Button.Flyout>
                         <Flyout ShowMode="Standard" OverlayDismissEventPassThrough="False" Placement="BottomEdgeAlignedRight" FlyoutPresenterTheme="{StaticResource PresetFlyoutTheme}">
                             <StackPanel Width="176" Spacing="2">
+                                <Button Classes="preset-action" Content="复制导出指令" Click="OnCopyExportCommandClick"/>
                                 <Button Classes="preset-action" Content="复制为新预设" Command="{Binding CopyPresetCommand}" Click="OnMenuActionClick"/>
                                 <Button Classes="preset-action" Content="重命名" Command="{Binding RenamePresetCommand}" Click="OnMenuActionClick"/>
                                 <Button Classes="preset-action" Content="删除预设" Command="{Binding DeletePresetCommand}" Click="OnMenuActionClick"/>

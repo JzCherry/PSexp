@@ -814,21 +814,23 @@ public partial class MainViewModel : ViewModelBase
 
     // ---------- 命令：开始执行（根据当前选中的模式触发导出） ----------
     [RelayCommand(CanExecute = nameof(CanExport))]
-    private async Task StartExportAsync()
-    {
-        if (IsViewSetting || !CanExport) return;
+    private Task StartExportAsync()
+        => IsViewSetting || !CanExport ? Task.CompletedTask : StartExportCoreAsync();
 
+    private async Task StartExportCoreAsync(ExportPresetParameters? preset = null)
+    {
+        var mode = preset?.Mode ?? SelectedMode;
         var pendingRefresh = _statusRefreshTask;
         IsPreparingExport = true;
         IsBusy = true;
         ExportStatusText = "正在检查 Photoshop 文档…";
-        AppendLog("Debug", $"收到导出请求 mode={SelectedMode}，等待文档同步={pendingRefresh is { IsCompleted: false }}");
+        AppendLog("Debug", $"收到导出请求 mode={mode}，等待文档同步={pendingRefresh is { IsCompleted: false }}");
         RefreshCanExecute();
 
         try
         {
             if (pendingRefresh is not null) await pendingRefresh;
-            await PrepareAndRunExportAsync();
+            await PrepareAndRunExportAsync(mode, preset);
         }
         finally
         {
@@ -838,25 +840,28 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private async Task PrepareAndRunExportAsync()
+    private async Task PrepareAndRunExportAsync(ExportMode mode, ExportPresetParameters? preset)
     {
         await RefreshStatusCoreAsync(silent: true, quiet: false);
-        if (!IsPsRunning || !IsBridgeAvailable || !HasDocument
-            || !string.IsNullOrEmpty(DocumentProbeError) || !HasExportTarget
-            || (SelectedMode is ExportMode.AllArtboards or ExportMode.SelectedArtboards && !HasArtboards)
-            || (SelectedMode == ExportMode.Slices && !HasSlices))
+        var destination = preset?.Destination ?? Destination;
+        var exportSettings = Snapshot(mode, preset);
+        var problem = !IsPsRunning || !IsBridgeAvailable || !HasDocument || !string.IsNullOrEmpty(DocumentProbeError)
+            ? ReadinessText
+            : mode is ExportMode.AllArtboards or ExportMode.SelectedArtboards && !HasArtboards
+                ? "当前文档没有画板"
+                : mode == ExportMode.Slices && !HasSlices
+                    ? "当前文档没有可用切片"
+                    : string.IsNullOrWhiteSpace(exportSettings.ExportPath) ? DescribeDestinationHint(destination) : null;
+        if (problem is not null)
         {
-            ExportStatusText = ReadinessText;
-            AppendLog("Warn", "未能开始导出：" + ExportStatusText);
+            ExportStatusText = problem;
+            AppendLog("Warn", "未能开始导出：" + problem);
             return;
         }
 
-        var exportSettings = Snapshot();
-        AppendLog("Info", $"导出请求 mode={SelectedMode} destination={Destination} parameters={System.Text.Json.JsonSerializer.Serialize(exportSettings)}");
-        if (SelectedMode == ExportMode.QuickExport)
-            exportSettings.ExpectedFileCount = 1;
-        if (SelectedMode == ExportMode.AllArtboards)
-            exportSettings.ExpectedFileCount = ArtboardCount;
+        if (mode == ExportMode.QuickExport) exportSettings.ExpectedFileCount = 1;
+        if (mode == ExportMode.AllArtboards) exportSettings.ExpectedFileCount = ArtboardCount;
+        AppendLog("Info", $"导出请求 mode={mode} destination={destination} parameters={System.Text.Json.JsonSerializer.Serialize(exportSettings)}");
         if (!ExportSettingsValidator.TryPrepare(exportSettings, out var validationError))
         {
             ExportStatusText = validationError;
@@ -864,28 +869,21 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        // Normalizing a preset must never replace the remembered custom directory.
-        if (IsCustomDestination) ExportPath = exportSettings.ExportPath;
+        // An external saved preset is a one-shot snapshot, independent of the active workspace.
+        if (preset is null && IsCustomDestination) ExportPath = exportSettings.ExportPath;
         _exportCts?.Dispose();
         _exportCts = new CancellationTokenSource();
-        switch (SelectedMode)
+        (string Title, Func<CancellationToken, Task<PsBridgeResult>> Run) job = mode switch
         {
-            case ExportMode.QuickExport:
-                await RunExportAsync(ct => _export.QuickExportAsync(exportSettings, OnExportProgress, ct), "快速导出", _exportCts.Token);
-                break;
-            case ExportMode.AllArtboards:
-                await RunExportAsync(ct => _export.ExportAllArtboardsAsync(exportSettings, OnExportProgress, ct), "全部画板导出", _exportCts.Token);
-                break;
-            case ExportMode.SelectedArtboards:
-                await RunExportAsync(ct => _export.ExportSelectedArtboardsAsync(exportSettings, OnExportProgress, ct), "选中导出", _exportCts.Token);
-                break;
-            case ExportMode.Layers:
-                await RunExportAsync(ct => _export.ExportLayersAsync(exportSettings, OnExportProgress, ct), "图层导出", _exportCts.Token);
-                break;
-            case ExportMode.Slices:
-                await RunExportAsync(ct => _export.ExportSlicesAsync(exportSettings, OnExportProgress, ct), "切片导出", _exportCts.Token);
-                break;
-        }
+            ExportMode.QuickExport => ("快速导出", ct => _export.QuickExportAsync(exportSettings, OnExportProgress, ct)),
+            ExportMode.AllArtboards => ("全部画板导出", ct => _export.ExportAllArtboardsAsync(exportSettings, OnExportProgress, ct)),
+            ExportMode.SelectedArtboards => ("选中导出", ct => _export.ExportSelectedArtboardsAsync(exportSettings, OnExportProgress, ct)),
+            ExportMode.Layers => ("图层导出", ct => _export.ExportLayersAsync(exportSettings, OnExportProgress, ct)),
+            ExportMode.Slices => ("切片导出", ct => _export.ExportSlicesAsync(exportSettings, OnExportProgress, ct)),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode))
+        };
+        await RunExportAsync(job.Run, job.Title, exportSettings.ExportPath,
+            mode == ExportMode.AllArtboards ? exportSettings.ExpectedFileCount : null, _exportCts.Token);
     }
 
     [RelayCommand(CanExecute = nameof(CanCancel))]
@@ -930,7 +928,7 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task RunExportAsync(
         Func<CancellationToken, Task<PsBridgeResult>> factory,
-        string title,
+        string title, string outputDirectory, int? expectedFileCount,
         CancellationToken cancellationToken)
     {
         IsPreparingExport = false;
@@ -942,9 +940,7 @@ public partial class MainViewModel : ViewModelBase
         CanOpenExportFolder = false;
         _lastSuccessfulExportDirectory = string.Empty;
         ExportedFiles.Clear();
-        _activeExpectedFileCount = SelectedMode == ExportMode.AllArtboards
-            ? ArtboardCount
-            : null;
+        _activeExpectedFileCount = expectedFileCount;
         ExportStatusText = _activeExpectedFileCount is > 0
             ? $"{title} 开始... 0 / {_activeExpectedFileCount.Value}"
             : $"{title} 开始...";
@@ -964,7 +960,7 @@ public partial class MainViewModel : ViewModelBase
                 _lastSuccessfulExportDirectory = result.OutputFiles
                     .Select(Path.GetDirectoryName)
                     .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
-                    ?? ResolvedExportPath;
+                    ?? outputDirectory;
                 CanOpenExportFolder = Directory.Exists(_lastSuccessfulExportDirectory);
                 ExportStatusText = $"{title} 完成 · 共 {ExportedCount} 个文件"
                     + (string.IsNullOrWhiteSpace(exportWarning) ? "" : "；" + exportWarning);
@@ -999,29 +995,28 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private ExportSettings Snapshot()
+    private ExportSettings Snapshot(ExportMode mode, ExportPresetParameters? preset)
     {
-        var prefix = SelectedMode == ExportMode.QuickExport ? "" : ExportFilePrefix.Normalize(ImageName);
-        var effectiveImageName = SelectedMode == ExportMode.QuickExport ? ImageName
-            : SelectedMode == ExportMode.Layers ? prefix : "";
+        var naming = preset is null ? ImageName : mode == ExportMode.QuickExport ? preset.ImageName : preset.FilePrefix ?? "";
+        var prefix = mode == ExportMode.QuickExport ? "" : ExportFilePrefix.Normalize(naming);
 
         return new ExportSettings
         {
-            ExportPath = ResolvedExportPath,
+            ExportPath = preset is null ? ResolvedExportPath : ResolveExportPath(preset.Destination, preset.CustomPath),
             DocumentName = DocumentName,
-            Format = Format,
-            Quality = Quality,
-            AutoRename = AutoRename,
-            FileName = SelectedMode == ExportMode.Slices ? prefix : string.Empty,
+            Format = preset?.Format ?? Format,
+            Quality = preset?.Quality ?? Quality,
+            AutoRename = preset?.AutoRename ?? AutoRename,
+            FileName = mode == ExportMode.Slices ? prefix : string.Empty,
             FilePrefix = prefix,
-            SliceFolderName = SelectedMode == ExportMode.Slices ? SliceFolderName : string.Empty,
-            ImageName = effectiveImageName,
+            SliceFolderName = mode == ExportMode.Slices ? preset?.SliceFolder ?? SliceFolderName : string.Empty,
+            ImageName = mode == ExportMode.QuickExport ? naming : mode == ExportMode.Layers ? prefix : "",
             LayerExportWithDocName = false,
-            LayerExportRecursive = LayerExportRecursive,
-            LayerExportSelectedOnly = LayerExportSelectedOnly,
-            LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
+            LayerExportRecursive = preset?.LayerRecursive ?? LayerExportRecursive,
+            LayerExportSelectedOnly = preset?.LayerSelectedOnly ?? LayerExportSelectedOnly,
+            LayerTopLevelSelectedOnly = preset?.LayerTopLevelSelectedOnly ?? LayerTopLevelSelectedOnly,
             LayerExportShowHint = LayerExportShowHint,
-            ExportPathOption = ExportPathOption
+            ExportPathOption = preset?.ArtboardPath ?? ExportPathOption
         };
     }
 

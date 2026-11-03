@@ -12,14 +12,18 @@ public partial class MainViewModel
 
     public bool IsCustomDestination => Destination == ExportDestination.Custom;
     public bool IsPresetDestination => !IsCustomDestination;
-    public string ResolvedExportPath => Destination switch
+    public string ResolvedExportPath => ResolveExportPath(Destination, ExportPath);
+
+    private string ResolveExportPath(ExportDestination destination, string? customPath) => destination switch
     {
         ExportDestination.DocumentFolder => _documentDirectory,
         ExportDestination.Desktop => DesktopDirectory,
-        _ => ExportPath?.Trim() ?? string.Empty
+        _ => customPath?.Trim() ?? string.Empty
     };
 
-    public string DestinationHint => Destination switch
+    public string DestinationHint => DescribeDestinationHint(Destination);
+
+    private string DescribeDestinationHint(ExportDestination destination) => destination switch
     {
         ExportDestination.DocumentFolder => HasDocument
             ? "文档尚未保存，请先保存，或改选桌面 / 自定义。"

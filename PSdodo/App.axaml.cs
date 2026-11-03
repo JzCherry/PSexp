@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.Styling;
 using Microsoft.Extensions.DependencyInjection;
 using PsExporter.Models;
+using PsExporter.Core.Automation;
 using PsExporter.Core.Logging;
 using PsExporter.Core.Process;
 using PsExporter.Core.PsConnection;
@@ -22,6 +23,7 @@ public partial class App : Application
     private static AppThemeMode _themeMode = AppThemeMode.Light;
 
     public static SingleInstanceCoordinator? SingleInstance { get; set; }
+    internal static ExportInvocation? StartupExport { get; set; }
 
     public override void Initialize()
     {
@@ -37,16 +39,32 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            var model = provider.GetRequiredService<MainViewModel>();
             var mainWindow = new MainWindow
             {
-                DataContext = provider.GetRequiredService<MainViewModel>(),
+                DataContext = model,
                 ScriptBridge = provider.GetRequiredService<UxpScriptBridge>(),
             };
             mainWindow.PrepareSavedPlacement();
             desktop.MainWindow = mainWindow;
-            InitializeTray(desktop, mainWindow, provider.GetRequiredService<MainViewModel>(), provider.GetRequiredService<FileLogger>());
+            InitializeTray(desktop, mainWindow, model, provider.GetRequiredService<FileLogger>());
             SingleInstance?.StartListening(() =>
                 Dispatcher.UIThread.Post(mainWindow.ActivateFromExternalRequest));
+
+            var stop = new CancellationTokenSource();
+            var listener = ExportCommandPipe.ListenAsync(Program.ExportPipeName, (request, ct) =>
+                Dispatcher.UIThread.InvokeAsync(() => model.TryStartExternalExport(request),
+                    DispatcherPriority.Normal, ct).GetTask(), stop.Token);
+            desktop.Exit += (_, _) =>
+            {
+                stop.Cancel();
+                _ = listener.ContinueWith(_ => stop.Dispose(), TaskScheduler.Default);
+            };
+            if (StartupExport is { } startup)
+            {
+                StartupExport = null;
+                Dispatcher.UIThread.Post(() => model.TryStartExternalExport(startup), DispatcherPriority.Loaded);
+            }
         }
 
         base.OnFrameworkInitializationCompleted();

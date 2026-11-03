@@ -1,7 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using Avalonia;
+using PsExporter.Core.Automation;
 using PsExporter.Core.PsConnection;
 using PsExporter.Core.Scripting;
 
@@ -10,6 +10,14 @@ namespace PsExporter;
 class Program
 {
     private const string InstanceName = @"Local\PSexpV3";
+    internal static string ExportPipeName
+    {
+        get
+        {
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            return "PSexpV3.Export." + process.SessionId;
+        }
+    }
 
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
@@ -27,17 +35,26 @@ class Program
         if (WindowsProcessPermissions.TryRelaunchForPhotoshop(args)) return;
         args = Array.FindAll(args, argument => argument != WindowsProcessPermissions.RelaunchArgument);
 
+        if (!ExportInvocation.TryParse(args, out var invocation))
+        {
+            Environment.ExitCode = 2;
+            return;
+        }
+
         using var singleInstance = new SingleInstanceCoordinator(InstanceName);
         if (!singleInstance.IsPrimary)
         {
-            singleInstance.SignalPrimary();
+            if (invocation is null) singleInstance.SignalPrimary();
+            else if (!ExportCommandPipe.SendAsync(ExportPipeName, args).GetAwaiter().GetResult())
+                Environment.ExitCode = 3;
             return;
         }
 
         App.SingleInstance = singleInstance;
+        App.StartupExport = invocation;
         try
         {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime([]);
         }
         finally
         {
