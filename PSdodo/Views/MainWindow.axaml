@@ -256,6 +256,8 @@
                                 Classes="mode"
                                 Command="{Binding SelectModeCommand}"
                                 CommandParameter="{x:Static models:ExportMode.QuickExport}"
+                                ToolTip.Tip="快速导出（Shift+1）"
+                                AutomationProperties.AcceleratorKey="Shift+1"
                                 IsEnabled="{Binding CanChangeMode}">
                             <controls:ContinuousBorder Classes="mode-fill"
                                     Background="Transparent"
@@ -270,6 +272,8 @@
                                 Classes="mode"
                                 Command="{Binding SelectModeCommand}"
                                 CommandParameter="{x:Static models:ExportMode.AllArtboards}"
+                                ToolTip.Tip="画板导出（Shift+2）"
+                                AutomationProperties.AcceleratorKey="Shift+2"
                                 controls:AnimatedSegmentTrack.SelectionAlias="{x:Static models:ExportMode.SelectedArtboards}"
                                 IsEnabled="{Binding CanChangeMode}">
                             <controls:ContinuousBorder Classes="mode-fill"
@@ -285,6 +289,8 @@
                                 Classes="mode"
                                 Command="{Binding SelectModeCommand}"
                                 CommandParameter="{x:Static models:ExportMode.Layers}"
+                                ToolTip.Tip="图层导出（Shift+3）"
+                                AutomationProperties.AcceleratorKey="Shift+3"
                                 IsEnabled="{Binding CanChangeMode}">
                             <controls:ContinuousBorder Classes="mode-fill"
                                     Background="Transparent"
@@ -299,6 +305,8 @@
                                 Classes="mode"
                                 Command="{Binding SelectModeCommand}"
                                 CommandParameter="{x:Static models:ExportMode.Slices}"
+                                ToolTip.Tip="切片导出（Shift+4）"
+                                AutomationProperties.AcceleratorKey="Shift+4"
                                 IsEnabled="{Binding CanChangeMode}">
                             <controls:ContinuousBorder Classes="mode-fill"
                                     Background="Transparent"
@@ -1203,6 +1211,8 @@
                             </Button>
                             <Button x:Name="StartExportButton" Classes="primary"
                                     Command="{Binding StartExportCommand}"
+                                    ToolTip.Tip="开始导出（Enter）"
+                                    AutomationProperties.AcceleratorKey="Enter"
                                     IsVisible="{Binding !IsExporting}"
                                     VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space.Sm}">

@@ -217,6 +217,11 @@ public partial class MainWindow : Window
             }
             if (!IsPopupInputSource(args.Source) && ExportPresets.DismissOnEscape()) args.Handled = true;
         }, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnExportShortcutKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, (_, args) =>
+        {
+            if (args.Key == Key.Enter) _exportEnterHeld = false;
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
         SetWindowCornerRound();
     }
 

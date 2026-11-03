@@ -19,6 +19,7 @@ public partial class MainWindow
 
     private void OnWindowDeactivated(object? sender, EventArgs e)
     {
+        _exportEnterHeld = false;
         _hasProbedCurrentActivation = false;
         EndInputEditing();
         // 起步/交接时恢复任务栏样式可能短暂失活，不能把内部呈现调整当成点击外部。

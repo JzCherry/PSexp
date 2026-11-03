@@ -14,6 +14,8 @@ namespace PsExporter.Views;
 
 public partial class ExportPresetBar : UserControl
 {
+    internal bool HasOpenMenu => PresetPicker.Flyout?.IsOpen == true || PresetMore.Flyout?.IsOpen == true;
+
     private MainViewModel? _model;
     public ExportPresetBar()
     {
@@ -70,7 +72,7 @@ public partial class ExportPresetBar : UserControl
         for (var visual = source; visual is not null; visual = visual.GetVisualParent())
             if (visual is FlyoutPresenter or MenuFlyoutPresenter or Avalonia.Controls.ContextMenu) return false; // Keep popup content interactive.
 
-        if (PresetPicker.Flyout?.IsOpen == true || PresetMore.Flyout?.IsOpen == true)
+        if (HasOpenMenu)
         {
             HideMenus();
             args.Handled = true;
@@ -89,7 +91,7 @@ public partial class ExportPresetBar : UserControl
 
     public bool DismissOnEscape()
     {
-        if (PresetPicker.Flyout?.IsOpen == true || PresetMore.Flyout?.IsOpen == true)
+        if (HasOpenMenu)
         { HideMenus(); return true; }
         if (_model?.IsPresetEditorOpen != true) return false;
         CancelEditor();
