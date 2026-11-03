@@ -13,12 +13,25 @@ function Get-PSexpSigningKeyPath {
     return Join-Path $localData 'PSexp\ReleaseSigning\update-key.dpapi'
 }
 
+function Get-PSexpSigningBackupPath {
+    $userProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+    if ([string]::IsNullOrWhiteSpace($userProfile)) {
+        throw 'Windows could not resolve the current user profile for the protected key backup.'
+    }
+    return Join-Path $userProfile '.psexp-release-signing\update-key.dpapi'
+}
+
+function Read-PSexpProtectedSigningKey([string]$Path, [string]$RepoPrefix) {
+    if ($Path.StartsWith($RepoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Private signing keys must stay outside the source repository.'
+    }
+    return ,([IO.File]::ReadAllBytes($Path))
+}
+
 function Get-PSexpUpdateSigner([string]$Repository) {
     $keyFile = Get-PSexpSigningKeyPath
     $repoPrefix = [IO.Path]::GetFullPath($Repository).TrimEnd('\') + '\'
-    if ($keyFile.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Private signing keys must stay outside the source repository.'
-    }
+
     $trustPath = Join-Path $Repository 'PSdodo\Resources\Updates\update-public-key.json'
     $trusted = [IO.File]::ReadAllText($trustPath) | ConvertFrom-Json
     if ($trusted.algorithm -ne 'RSA-SHA256-PKCS1') { throw 'Unsupported release signing algorithm.' }
@@ -27,9 +40,21 @@ function Get-PSexpUpdateSigner([string]$Repository) {
     $protectedBytes = $null
     $rsa = $null
     try {
-        # The actual read is authoritative. Test-Path may hide the underlying provider/access error.
         try {
-            $protectedBytes = [IO.File]::ReadAllBytes($keyFile)
+            try {
+                $protectedBytes = Read-PSexpProtectedSigningKey $keyFile $repoPrefix
+            } catch {
+                $cause = $_.Exception.GetBaseException()
+                if (-not [string]::IsNullOrWhiteSpace($env:PSexpSigningKeyFile) -or
+                    ($cause -isnot [IO.FileNotFoundException] -and $cause -isnot [IO.DirectoryNotFoundException])) {
+                    throw
+                }
+                # Only a missing default path can use the same user's verified DPAPI backup.
+                Write-Host ('[signing] Default key path unavailable: ' + $cause.Message)
+                $keyFile = Get-PSexpSigningBackupPath
+                Write-Host ('[signing] Trying protected local backup: ' + $keyFile)
+                $protectedBytes = Read-PSexpProtectedSigningKey $keyFile $repoPrefix
+            }
         } catch {
             $cause = $_.Exception.GetBaseException()
             $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -38,7 +63,7 @@ function Get-PSexpUpdateSigner([string]$Repository) {
                 ' / ' + $cause.Message + '. User SID: ' + $identity.User.Value +
                 '. Keep the original key; do not generate a replacement.')
         }
-        Write-Host '[signing] Protected key read: OK'
+        Write-Host ('[signing] Protected key read: OK (' + $keyFile + ')')
         $plain = [Security.Cryptography.ProtectedData]::Unprotect(
             $protectedBytes, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
         $rsa = [Security.Cryptography.RSACryptoServiceProvider]::new(3072)
