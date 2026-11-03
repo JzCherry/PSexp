@@ -543,8 +543,9 @@ try
         Equal(0, ScriptLibrary.ExtractPlaceholders(injected).Count);
         True(injected.Contains("const withDocName = false;"));
         True(!injected.Contains("showAlert"));
-        True(injected.Contains("await doc.saveAs.jpg("));
-        True(injected.Contains("await doc.saveAs.png("));
+        True(injected.Contains("const format = \"jpg\".toLowerCase();"));
+        True(injected.Contains("const quality = 80;"));
+        True(injected.Contains("const imageName = \"demo\";"));
     });
 
     Run("Layer script exports only top-level layers and restores visibility", () =>
