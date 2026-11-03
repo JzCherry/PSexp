@@ -69,15 +69,13 @@ public partial class MainWindow : Window
     private PixelRect _constraintScreenBounds;
     private double _constraintScreenScaling;
 
-    // ====== Win32 子类化：拦截 WM_EXITSIZEMOVE ======
-    // 原生标题栏拖拽结束时，Windows 发送 WM_EXITSIZEMOVE (0x0232)。
-    // 在此消息处直接评估吸附，不依赖 DispatcherTimer（模态循环中不可靠）。
+    // 原生移动循环也可能由单击启动。窗口确实移动后才解除贴边。
+    private const int WM_ENTERSIZEMOVE = 0x0231;
     private const int WM_EXITSIZEMOVE = 0x0232;
-    private const int WM_NCLBUTTONDOWN = 0x00A1;
-    private const int WM_NCLBUTTONUP = 0x00A2;
-    private const int HTCAPTION = 2;
+    private const int WM_MOVING = 0x0216;
     private const int GWL_WNDPROC = -4;
-    private bool _isNativeTitleBarDrag;
+    private PixelPoint? _nativeMoveStartPosition;
+    private bool _nativeMoveObserved;
     private IntPtr _originalWndProc;
     private WndProcDelegate? _subclassProc;   // 持有引用防止 GC 回收
     private bool _isSubclassed;
@@ -110,20 +108,28 @@ public partial class MainWindow : Window
         if (msg == 0x0021 && _isSnapAnimating) return new IntPtr(3); // WM_MOUSEACTIVATE / MA_NOACTIVATE
         if (msg == 0x0112 && (wParam.ToInt64() & 0xFFF0) == 0xF020
             && TryQueueDockRetraction("native-system-minimize")) return IntPtr.Zero;
-        if (msg == WM_NCLBUTTONDOWN && wParam.ToInt64() == HTCAPTION)
+        if (msg == WM_ENTERSIZEMOVE)
         {
-            _isNativeTitleBarDrag = true;
-            Dispatcher.UIThread.Post(BeginUndockForDrag);
+            _nativeMoveStartPosition = Position;
+            _nativeMoveObserved = false;
         }
-        else if (msg == WM_NCLBUTTONUP && _isNativeTitleBarDrag)
+        else if (msg == WM_MOVING)
         {
-            _isNativeTitleBarDrag = false;
-            Dispatcher.UIThread.Post(OnWindowMoveFinished);
+            _nativeMoveObserved = true;
         }
         else if (msg == WM_EXITSIZEMOVE)
         {
-            _isNativeTitleBarDrag = false;
-            Dispatcher.UIThread.Post(OnWindowMoveFinished);
+            var startPosition = _nativeMoveObserved ? _nativeMoveStartPosition : null;
+            var generation = _edgeAnimationGeneration;
+            _nativeMoveStartPosition = null;
+            _nativeMoveObserved = false;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (generation != _edgeAnimationGeneration) return;
+                if (_isDocked && startPosition is { } origin && Position != origin)
+                    BeginUndockForDrag(restoreExpandedPosition: false);
+                OnWindowMoveFinished();
+            });
         }
 
         return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
@@ -703,7 +709,7 @@ public partial class MainWindow : Window
         StartEdgeAnimation(_dockExpandedPos, DockAnimationMotion.RevealDurationMs);
     }
 
-    private void BeginUndockForDrag()
+    private void BeginUndockForDrag(bool restoreExpandedPosition = true)
     {
         if (!_isDocked) return;
         _edgeHoverTimer.Stop();
@@ -715,7 +721,7 @@ public partial class MainWindow : Window
         CloseDockIcon();
         ClearDockRevealBitmap();
         WindowTaskSwitcher.Configure(this, excluded: false);
-        Position = _dockExpandedPos;
+        if (restoreExpandedPosition) Position = _dockExpandedPos;
         Opacity = 1.0;
         _isDocked = false;
         _isDockRevealed = false;
@@ -774,7 +780,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!GetCursorPos(out var cursor)) return;
+        if (_nativeMoveStartPosition is not null || !GetCursorPos(out var cursor)) return;
 
         // 收纳态只由图标的 PointerEntered/PointerPressed 触发展开，
         // 不再使用整条边或隐藏窗口感应带，避免误触。
@@ -1044,8 +1050,8 @@ public partial class MainWindow : Window
                 or ToggleSwitch or CheckBox or ListBox or AnimatedSegmentTrack) return;
             if (visual is Control { Name: "QualityMeter" }) return;
         }
-        // 空白处直接进入系统移动循环；导出、文本编辑、质量拖动和边缘缩放各保留原有操作。
-        BeginUndockForDrag();
+        // 空白处交给系统区分单击与移动，Windows 确认实际移动后才解除贴边。
+        if (!_isSubclassed) BeginUndockForDrag();
         BeginMoveDrag(e);
         e.Handled = true;
     }

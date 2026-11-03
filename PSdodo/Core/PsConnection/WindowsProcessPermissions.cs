@@ -79,7 +79,7 @@ internal static class WindowsProcessPermissions
     internal static bool TryRelaunchForPhotoshop(string[] args)
     {
         if (!OperatingSystem.IsWindows()) return false;
-        var logger = new FileLogger(Path.Combine(AppContext.BaseDirectory, "psx.log"));
+        var logger = new FileLogger();
         var current = Read(Environment.ProcessId);
         if (current is null) return false;
         logger.Info($"[permissions] pid={Environment.ProcessId} PSexp={current.Label} integrity={current.Integrity}");

@@ -19,7 +19,7 @@ public sealed class ExportService : IExportService
     public ExportService(UxpScriptBridge uxpBridge, FileLogger? logger = null)
     {
         _uxpBridge = uxpBridge;
-        _logger = logger ?? new FileLogger(Path.Combine(AppContext.BaseDirectory, "psx.log"));
+        _logger = logger ?? new FileLogger();
     }
 
     // 三个快速导出走 UXP（.psjs 文件关联触发，支持 batchPlay + executeAsModal）

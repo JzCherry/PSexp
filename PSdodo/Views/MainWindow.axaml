@@ -954,12 +954,6 @@
                                         </StackPanel>
                                     </controls:ContinuousBorder>
                                 </StackPanel>
-                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowMemoryNote}">
-                                    <TextBlock Classes="settings-group-label" Text="参数记忆"/>
-                                    <controls:ContinuousBorder Classes="settings-section">
-                                        <TextBlock Classes="settings-caption" Text="输出位置、格式、质量等参数自动保存，清空也会记住。"/>
-                                    </controls:ContinuousBorder>
-                                </StackPanel>
                                 <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowPhotoshopCard}">
                                     <TextBlock Classes="settings-group-label" Text="Photoshop"/>
                                     <controls:ContinuousBorder Classes="settings-section">

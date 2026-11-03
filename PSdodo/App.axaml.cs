@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -131,11 +130,7 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
-        // 运行日志与 EXE 放在同一目录，便于直接检查。
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var logDirectory = AppContext.BaseDirectory;
-        Directory.CreateDirectory(logDirectory);
-        var fileLogger = new FileLogger(Path.Combine(logDirectory, "psx.log"));
+        var fileLogger = new FileLogger();
         fileLogger.Info($"启动 pid={Environment.ProcessId} exe={Environment.ProcessPath} version={typeof(App).Assembly.GetName().Version} log={fileLogger.LogPath}");
         services.AddSingleton(fileLogger);
 

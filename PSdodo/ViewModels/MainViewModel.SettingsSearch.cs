@@ -14,7 +14,6 @@ public partial class MainViewModel
         new("Tray", "窗口 关闭后常驻后台 常驻 托盘 隐藏 后台运行 退出 close tray background"),
         new("Edge", "窗口 贴边收纳 屏幕边缘 悬浮入口 自动隐藏 展开 吸附 dock edge"),
         new("Delay", "窗口 贴边收纳 收回等待 延时 延迟 快速 标准 从容 250 420 800 毫秒 delay"),
-        new("Memory", "参数记忆 导出 自动保存 设置记忆 默认参数 路径 格式 质量 记住 保存 偏好 memory save preferences"),
         new("Sync", "Photoshop PS 联动 自动同步 文档识别 读取 置顶 焦点 刷新 document refresh sync"),
         new("Data", "数据与日志 设置目录 配置目录 预设数据 偏好 默认参数 文件夹 data settings directory configuration"),
         new("Log", "数据与日志 日志目录 运行记录 导出记录 报错 调试 psx.log log debug directory"),
@@ -33,14 +32,13 @@ public partial class MainViewModel
     public bool ShowTraySetting => _matchingSettings.Contains("Tray");
     public bool ShowEdgeSetting => _matchingSettings.Contains("Edge");
     public bool ShowDelaySetting => _matchingSettings.Contains("Delay");
-    public bool ShowMemoryNote => _matchingSettings.Contains("Memory");
     public bool ShowSyncSetting => _matchingSettings.Contains("Sync");
     public bool ShowDataSetting => _matchingSettings.Contains("Data");
     public bool ShowLogSetting => _matchingSettings.Contains("Log");
     public bool ShowCheckSetting => _matchingSettings.Contains("Check");
     public bool ShowDownloadSetting => _matchingSettings.Contains("Download");
     public bool ShowVersionCard => _matchingSettings.Contains("Version");
-    // Five groups: the card shows when any row inside it matches; each row keeps its own filter.
+    // Settings groups: the card shows when any row inside it matches; each row keeps its own filter.
     public bool ShowUiWindowCard => ShowThemeSetting || ShowTraySetting || ShowEdgeSetting || ShowDelaySetting;
     public bool ShowPhotoshopCard => ShowSyncSetting;
     public bool ShowUpdateCard => ShowCheckSetting || ShowDownloadSetting || ShowVersionCard;
@@ -64,7 +62,7 @@ public partial class MainViewModel
         {
             nameof(HasSettingsSearchText), nameof(IsSearchingSettings), nameof(HasNoSettingsSearchResults), nameof(SettingsSearchSummary),
             nameof(ShowThemeSetting), nameof(ShowTraySetting), nameof(ShowEdgeSetting), nameof(ShowDelaySetting),
-            nameof(ShowMemoryNote), nameof(ShowSyncSetting),
+            nameof(ShowSyncSetting),
             nameof(ShowDataSetting), nameof(ShowLogSetting), nameof(ShowCheckSetting), nameof(ShowDownloadSetting), nameof(ShowVersionCard),
             nameof(ShowUiWindowCard), nameof(ShowPhotoshopCard), nameof(ShowUpdateCard), nameof(ShowDataCard),
             nameof(ShowThemeTrayLine), nameof(ShowTrayEdgeLine), nameof(ShowEdgeDelayLine),

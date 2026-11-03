@@ -1,11 +1,10 @@
 using System;
 using System.IO;
-using System.Threading;
 
 namespace PsExporter.Core.Logging;
 
 /// <summary>
-/// 写入调用方指定的日志文件；应用使用 EXE 同级目录的 psx.log。
+/// 默认将运行日志写入当前用户的本地数据目录。
 /// </summary>
 public sealed class FileLogger
 {
@@ -13,6 +12,11 @@ public sealed class FileLogger
     private readonly string _logPath;
 
     public string LogPath => _logPath;
+
+    public FileLogger() : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "PSexp", "Logs", "psx.log"))
+    {
+    }
 
     public FileLogger(string logPath)
     {

@@ -216,7 +216,7 @@ PSexp 是一个配合本机 Photoshop 使用的 Windows 导出工具，把整张
 
 ### Q35：日志在哪？
 
-实际运行 EXE 同目录 `psx.log`，不是固定放 AppData。设置里的日志目录按钮能打开；设置 JSON 则在 `%APPDATA%/PsExporter/`。
+日志写入 `%LOCALAPPDATA%\PSexp\Logs\psx.log`，可从设置里的日志目录按钮打开。设置 JSON 保存在 `%APPDATA%/PsExporter/`。
 
 ### Q36：能只看最后一行错误就修吗？
 
