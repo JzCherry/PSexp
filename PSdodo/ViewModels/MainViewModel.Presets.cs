@@ -68,8 +68,10 @@ public partial class MainViewModel
                 {
                     Mode = ExportPresetCatalog.CategoryFor(legacy.LastExportMode) == category ? legacy.LastExportMode : ExportPresetCatalog.DefaultMode(category),
                     Format = Format, Quality = Quality, AutoRename = AutoRename, Destination = Destination, CustomPath = ExportPath,
+                    SaveAndCloseAfterExport = legacy.SaveAndCloseAfterExport,
                     ImageName = category == ExportPresetCategory.Quick ? _quickImageName : category == ExportPresetCategory.Layers ? _layerImagePrefix : "",
                     FilePrefix = category switch { ExportPresetCategory.Layers => _layerImagePrefix, ExportPresetCategory.Artboards => _artboardImagePrefix, ExportPresetCategory.Slices => FileName, _ => null },
+                    UseDocumentNameAsFallbackPrefix = category == ExportPresetCategory.Quick ? null : legacy.UseDocumentNameAsFallbackPrefix,
                     SlicePrefix = FileName, SliceFolder = SliceFolderName, ArtboardPath = ExportPathOption,
                     LayerRecursive = LayerExportRecursive, LayerSelectedOnly = LayerExportSelectedOnly,
                     LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
@@ -118,9 +120,11 @@ public partial class MainViewModel
     private ExportPresetParameters CapturePresetParameters(ExportMode mode) => new()
     {
         Mode = mode, Format = Format, Quality = Quality, AutoRename = AutoRename,
+        SaveAndCloseAfterExport = SaveAndCloseAfterExport,
         Destination = Destination, CustomPath = ExportPath,
         ImageName = mode == ExportMode.QuickExport ? _quickImageName : mode == ExportMode.Layers ? _layerImagePrefix : "",
         FilePrefix = mode switch { ExportMode.Layers => _layerImagePrefix, ExportMode.AllArtboards or ExportMode.SelectedArtboards => _artboardImagePrefix, ExportMode.Slices => FileName, _ => null },
+        UseDocumentNameAsFallbackPrefix = mode == ExportMode.QuickExport ? null : UseDocumentNameAsFallbackPrefix,
         SlicePrefix = FileName, SliceFolder = SliceFolderName, ArtboardPath = ExportPathOption,
         LayerRecursive = LayerExportRecursive, LayerSelectedOnly = LayerExportSelectedOnly,
         LayerTopLevelSelectedOnly = LayerTopLevelSelectedOnly,
@@ -164,6 +168,8 @@ public partial class MainViewModel
         {
             SelectedMode = p.Mode;
             Format = p.Format; Quality = p.Quality; AutoRename = p.AutoRename;
+            if (p.SaveAndCloseAfterExport is { } saveAndClose) SaveAndCloseAfterExport = saveAndClose;
+            if (naming && p.UseDocumentNameAsFallbackPrefix is { } useDocumentName) UseDocumentNameAsFallbackPrefix = useDocumentName;
             if (destination)
             {
                 Destination = p.Destination;
@@ -238,7 +244,8 @@ public partial class MainViewModel
 
     private static readonly HashSet<string> PresetParameterProperties = new(StringComparer.Ordinal)
     {
-        nameof(SelectedMode), nameof(Format), nameof(Quality), nameof(AutoRename), nameof(Destination), nameof(ExportPath),
+        nameof(SelectedMode), nameof(Format), nameof(Quality), nameof(AutoRename), nameof(SaveAndCloseAfterExport), nameof(Destination), nameof(ExportPath),
+        nameof(UseDocumentNameAsFallbackPrefix),
         nameof(ImageName), nameof(FileName), nameof(SliceFolderName), nameof(ExportPathOption), nameof(LayerExportRecursive),
         nameof(LayerExportSelectedOnly), nameof(LayerTopLevelSelectedOnly)
     };

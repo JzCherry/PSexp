@@ -15,8 +15,9 @@ public partial class MainViewModel
     private readonly CancellationTokenSource _updateLifetime = new();
     private bool _updatesStarted;
     [ObservableProperty] private bool _autoCheckForUpdates = true;
-    [ObservableProperty] private bool _autoDownloadUpdates = true;
+    [ObservableProperty] private bool _autoDownloadUpdates;
     [ObservableProperty] private bool _isUpdateBusy;
+    [ObservableProperty] private bool _isInstallingUpdate;
     [ObservableProperty] private double _updateProgress;
     [ObservableProperty] private string _updateStatus = "启动后自动检查更新";
     [ObservableProperty] private string _updateChangelog = "";
@@ -110,6 +111,7 @@ public partial class MainViewModel
     {
         if (_pendingUpdate is null) return;
         if (!UpdateService.IsSingleFileInstallation) throw new IOException("目录开发版请使用编译脚本更新，自动安装仅支持发布版 EXE");
+        UpdateProgress = 0;
         UpdateStatus = "正在下载 v" + _pendingUpdate.Version + "…";
         _downloadedUpdate = await Updater.DownloadAsync(_pendingUpdate,
             new Progress<double>(value => UpdateProgress = value), _updateLifetime.Token);
@@ -127,6 +129,7 @@ public partial class MainViewModel
                 UpdateStatus = "更新已下载，导出结束后可重启安装";
                 return;
             }
+            IsInstallingUpdate = true;
             Updater.BeginInstall(_pendingUpdate, _downloadedUpdate!);
             if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 desktop.Shutdown();
@@ -139,6 +142,7 @@ public partial class MainViewModel
         }
         finally
         {
+            IsInstallingUpdate = false;
             IsUpdateBusy = false;
             OnPropertyChanged(nameof(UpdateActionText));
             RefreshUpdateCommands();

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using PsExporter;
+using PsExporter.Core.Automation;
 using PsExporter.Core.Logging;
 using PsExporter.Core.Process;
 using PsExporter.Core.PsConnection;
@@ -52,12 +53,16 @@ internal static class PresetTests
             CheckCommandWindowSize(new() { ExportCommandWindowWidth = 440, ExportCommandWindowHeight = 600, ExportCommandWindowSizeVersion = 1 },
                 (440, 600), "command window retains a size chosen after migration").GetAwaiter().GetResult();
             Check(vm.AvailablePresets.Count == 1 && !vm.AvailablePresets[0].IsSelected, "editable initial default in first workspace");
-            vm.Quality = 91; vm.ImageName = "hero"; Save("电商");
+            vm.Quality = 91; vm.ImageName = "hero"; vm.SaveAndCloseAfterExport = true; Save("电商");
             Check(!vm.IsPresetModified, "saved preset matches current parameters");
+            vm.SaveAndCloseAfterExport = false;
+            Check(vm.IsPresetModified, "save-and-close participates in modified state");
+            vm.RestorePresetCommand.Execute(null);
+            Check(vm.SaveAndCloseAfterExport && !vm.IsPresetModified, "restore applies saved save-and-close without exporting");
             vm.Quality = 88;
             Check(vm.IsPresetModified, "temporary change is marked modified");
             vm.SelectedMode = ExportMode.Layers;
-            Check(vm.Quality == 80 && vm.AvailablePresets.Count == 1, "layers do not inherit quick-export changes");
+            Check(vm.Quality == 80 && !vm.SaveAndCloseAfterExport && vm.AvailablePresets.Count == 1, "layers do not inherit quick-export changes");
             vm.Format = ExportFormat.Png; vm.LayerExportRecursive = true; vm.LayerExportSelectedOnly = false; vm.ImageName = "layer";
             Save("电商");
             Check(vm.Format == ExportFormat.Png && !vm.IsPresetModified, "same preset name is allowed in another workspace");
@@ -73,12 +78,14 @@ internal static class PresetTests
             Check(vm.Format == ExportFormat.Png && vm.LayerExportRecursive && !vm.LayerExportSelectedOnly && vm.ImageName == "layer", "layer scope and naming restore together");
             vm.SelectedMode = ExportMode.QuickExport; vm.Quality = 79; vm.FlushParameterMemory();
             var resumed = Make();
+            Check(resumed.SaveAndCloseAfterExport, "restart restores save-and-close in the quick export workspace");
             Check(resumed.SelectedMode == ExportMode.QuickExport && resumed.Quality == 79 && resumed.PresetDisplayName == "电商" && resumed.IsPresetModified, "restart restores selected preset and unsaved edits");
             resumed.SelectedMode = ExportMode.Slices;
             Check(resumed.SliceFolderName == "slices" && resumed.FileName == "" && resumed.PresetDisplayName == "切片包", "restart restores another workspace including empty prefix");
             resumed.StopDocumentEventsAsync().GetAwaiter().GetResult();
             vm.DeletePresetCommand.Execute(null); vm.ConfirmPresetEditorCommand.Execute(null);
-            Check(vm.AvailablePresets.Count == 1 && vm.Quality == 79 && vm.ImageName == "hero", "delete preserves current export parameters");
+            Check(vm.AvailablePresets.Count == 1 && vm.Quality == 79 && vm.ImageName == "hero",
+                $"delete preserves current export parameters (count={vm.AvailablePresets.Count}, quality={vm.Quality}, name={vm.ImageName})");
             vm.ApplyPresetCommand.Execute(vm.AvailablePresets[0]);
             Check(vm.Quality == 80 && vm.RenamePresetCommand.CanExecute(null) && vm.DeletePresetCommand.CanExecute(null), "initial default can be renamed and deleted");
             vm.Quality = 83; vm.SaveCurrentPresetCommand.Execute(null);
@@ -114,6 +121,7 @@ internal static class PresetTests
             Check(rollback.AvailablePresets.Any(item => item.Name == "通用"), "legacy settings writes do not erase separate preset storage");
             rollback.StopDocumentEventsAsync().GetAwaiter().GetResult();
             Check(photo.Calls == 0 && exporter.Calls == 0, "all preset operations make zero Photoshop or export calls");
+            CheckExternalPresetActions(root);
             if (args.Length > 0)
             {
                 Directory.CreateDirectory(args[0]);
@@ -132,6 +140,55 @@ internal static class PresetTests
         }
         finally { vm.StopDocumentEventsAsync().GetAwaiter().GetResult(); }
     }
+
+    private static void CheckExternalPresetActions(string root)
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(root, "external")).FullName;
+        var document = Path.Combine(directory, "海报.psd");
+        File.WriteAllText(document, "");
+        var fixture = new ExternalExportFixture(document);
+        var settings = new SettingsService(Path.Combine(directory, "settings.json"));
+        settings.Save(new AppSettings { LastExportMode = ExportMode.Slices, AutoRefreshOnActivated = false });
+        var vm = new MainViewModel(fixture, fixture, settings, new FileLogger(Path.Combine(directory, "test.log")));
+        try
+        {
+            vm.Destination = ExportDestination.Custom;
+            vm.ExportPath = directory;
+            vm.SaveAndCloseAfterExport = true;
+            vm.UseDocumentNameAsFallbackPrefix = true;
+            vm.SaveNewPresetCommand.Execute(null);
+            vm.PresetEditorName = "自动切片";
+            vm.ConfirmPresetEditorCommand.Execute(null);
+            vm.SaveAndCloseAfterExport = false;
+            vm.UseDocumentNameAsFallbackPrefix = false;
+            vm.ImageName = "未保存的前缀";
+            vm.Destination = ExportDestination.Desktop;
+            Check(vm.IsPresetModified, "document-name fallback and save-and-close are saved options");
+
+            var start = typeof(MainViewModel).GetMethod("TryStartExternalExport",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var preset = vm.AvailablePresets.Single(item => item.Name == "自动切片");
+            Check(start.Invoke(vm, [ExportInvocation.ForPresetId(preset.Id)]) is true,
+                "the command and trial-run entry point accepts the saved preset");
+            Check(fixture.LastSettings?.FileName == "海报" && fixture.LastSettings.ExportPath == directory && fixture.CloseCalls == 1,
+                "saved external preset uses its output directory, document name and save-and-close switch");
+            Check(!vm.SaveAndCloseAfterExport && !vm.UseDocumentNameAsFallbackPrefix
+                && vm.ImageName == "未保存的前缀" && vm.Destination == ExportDestination.Desktop,
+                "external execution leaves current workspace options intact");
+
+            vm.Destination = ExportDestination.Custom;
+            vm.UseDocumentNameAsFallbackPrefix = true;
+            vm.ImageName = "手动前缀";
+            vm.SaveCurrentPresetCommand.Execute(null);
+            vm.SaveAndCloseAfterExport = true;
+            Check(start.Invoke(vm, [ExportInvocation.ForPresetName(ExportPresetCategory.Slices, preset.Name)]) is true,
+                "external execution also resolves a saved preset by name");
+            Check(fixture.LastSettings?.FileName == "手动前缀" && fixture.CloseCalls == 1,
+                "manual prefix wins and the saved off switch prevents closing the document");
+        }
+        finally { vm.StopDocumentEventsAsync().GetAwaiter().GetResult(); }
+    }
+
     private static void Render(MainViewModel vm, double width, string path)
     {
         var bar = new ExportPresetBar { DataContext = vm, Width = width };
@@ -150,6 +207,42 @@ internal static class PresetTests
         bitmap.Save(path); host.Close();
         Console.WriteLine("RENDER " + path + $" {width}x{height} DIP");
     }
+}
+
+internal sealed class ExternalExportFixture(string path) : IPhotoshopService, IExportService
+{
+    public ExportSettings? LastSettings { get; private set; }
+    public int CloseCalls { get; private set; }
+    public bool IsBridgeAvailable => true;
+    public PhotoshopProcessInfo DetectProcess() => new() { IsRunning = true, ProcessId = 123 };
+    public Task<PsDocumentInfo> GetDocumentInfoAsync(CancellationToken ct = default)
+        => Task.FromResult(new PsDocumentInfo { Name = Path.GetFileName(path), Path = Path.GetDirectoryName(path)!, HasSlices = true });
+    public async Task<(PsDocumentInfo Doc, PsBridgeResult Result)> ProbeDocumentInfoAsync(CancellationToken ct = default)
+        => (await GetDocumentInfoAsync(ct), new PsBridgeResult { Success = true });
+    public Task<(PsDocumentInfo Doc, PsBridgeResult Result)> ProbeDocumentInfoQuietlyAsync(CancellationToken ct = default)
+        => ProbeDocumentInfoAsync(ct);
+    public Task<PsBridgeResult> ExportSlicesAsync(ExportSettings settings, ExportProgressHandler? p = null, CancellationToken ct = default)
+    {
+        LastSettings = settings;
+        return Task.FromResult(new PsBridgeResult
+        {
+            Success = true, ExportedCount = 1,
+            ReturnValue = System.Text.Json.JsonSerializer.Serialize(new { sourceDocument = new { id = 42, path } })
+        });
+    }
+    public Task<PsBridgeResult> SaveAndCloseDocumentAsync(int documentId, string documentPath)
+    {
+        if (documentId != 42 || documentPath != path) throw new InvalidOperationException("Unexpected document");
+        CloseCalls++;
+        return Task.FromResult(new PsBridgeResult { Success = true });
+    }
+    public Task<bool> TryLaunchAsync(string? path, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<List<ArtboardInfo>> ListArtboardsAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<PsBridgeResult> ExecuteScriptAsync(string script, IReadOnlyDictionary<string, string> args, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<PsBridgeResult> QuickExportAsync(ExportSettings s, ExportProgressHandler? p = null, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<PsBridgeResult> ExportAllArtboardsAsync(ExportSettings s, ExportProgressHandler? p = null, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<PsBridgeResult> ExportSelectedArtboardsAsync(ExportSettings s, ExportProgressHandler? p = null, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<PsBridgeResult> ExportLayersAsync(ExportSettings s, ExportProgressHandler? p = null, CancellationToken ct = default) => throw new NotSupportedException();
 }
 
 public sealed class RejectPhotoshop : IPhotoshopService

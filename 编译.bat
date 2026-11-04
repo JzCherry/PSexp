@@ -35,7 +35,7 @@ call :read_tag AssemblyName ASSEMBLY_NAME
 if errorlevel 1 goto :csproj_unreadable
 call :read_tag Version APP_VERSION
 if errorlevel 1 goto :csproj_unreadable
-set "APP_NAME=PSexp v%APP_VERSION%.exe"
+set "APP_NAME=PSexp.exe"
 echo       assembly: %ASSEMBLY_NAME%   finished file: %APP_NAME%
 
 echo.

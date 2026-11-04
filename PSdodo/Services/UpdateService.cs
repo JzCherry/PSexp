@@ -141,8 +141,8 @@ public sealed class UpdateService(FileLogger logger)
         if (!IsSingleFileInstallation) throw new IOException("目录开发版请使用编译脚本更新；自动更新仅适用于发布版单文件 EXE");
         if (info.RequiresDotNet && !HasSharedRuntime()) throw new IOException("新版需要 .NET 10 x64 Runtime，请先安装运行时再更新");
         var target = Path.GetFullPath(Environment.ProcessPath!);
-        var destination = Regex.IsMatch(Path.GetFileName(target), @"^PSexp v\d+\.\d+(\.\d+)?\.exe$", RegexOptions.IgnoreCase)
-            ? Path.Combine(Path.GetDirectoryName(target)!, $"PSexp v{Version.Parse(info.Version).ToString(3)}.exe")
+        var destination = Regex.IsMatch(Path.GetFileName(target), @"^PSexp[ .]v\d+\.\d+(\.\d+)?\.exe$", RegexOptions.IgnoreCase)
+            ? Path.Combine(Path.GetDirectoryName(target)!, "PSexp.exe")
             : target;
         var script = Path.Combine(Path.GetDirectoryName(downloadedPath)!, "install.ps1");
         var dataPath = Path.Combine(Path.GetDirectoryName(downloadedPath)!, "install.json");
@@ -208,7 +208,7 @@ try {
             [IO.File]::Move($data.Target,$next)
             $renamed=$true
         } else {
-            Write-UpdateLog ('Versioned filename already in use. Keeping '+$data.Target)
+            Write-UpdateLog ('Destination filename already in use. Keeping '+$data.Target)
         }
         if($renamed) {
             $launch=$data.Destination

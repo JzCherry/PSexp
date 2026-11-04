@@ -1,7 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Threading;
 using PsExporter.ViewModels;
 
@@ -25,71 +23,56 @@ public partial class MainWindow
 
     private void ShowUpdatePrompt(MainViewModel model)
     {
-        if (_isClosing || _isHiddenToTray || _updatePrompt is not null
+        if (_isClosing || _updatePrompt is not null
             || model.AutomaticUpdateVersion is not { } version || _promptedUpdateVersion == version
             || Application.Current is App { IsExitRequested: true }) return;
 
-        var owned = IsVisible && IsActive && !_isSnapAnimating && (!_isDocked || _isDockRevealed);
-        var later = new Button { Content = "稍后", IsCancel = true, MinHeight = 36 };
-        var install = new Button
+        var owned = !_isHiddenToTray && IsVisible && IsActive && WindowState != WindowState.Minimized
+            && !_isSnapAnimating && (!_isDocked || _isDockRevealed);
+        var prompt = new UpdatePromptWindow(version, model.IsUpdateDownloaded)
         {
-            Content = model.IsUpdateDownloaded ? "重启并安装" : "下载并安装",
-            MinHeight = 36
-        };
-        var prompt = new Window
-        {
-            Title = "PSexp 软件更新",
-            Icon = Icon,
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            Topmost = owned && Topmost,
+            Topmost = !owned || Topmost,
             ShowInTaskbar = !owned,
-            WindowStartupLocation = owned ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
-            Content = new StackPanel
+            WindowStartupLocation = owned ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen
+        };
+        var install = prompt.InstallAction;
+        var applying = false;
+        // Keep the consent tied to the version shown, even if a manual check runs behind the prompt.
+        void RefreshPrompt(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(MainViewModel.CanApplyUpdate))
+                install.IsEnabled = !applying && model.AutomaticUpdateVersion == version;
+            if (!applying) return;
+            if (e.PropertyName == nameof(MainViewModel.UpdateProgress) && !model.IsInstallingUpdate)
+                prompt.ShowDownloadProgress(model.UpdateProgress);
+            if (e.PropertyName == nameof(MainViewModel.IsInstallingUpdate) && model.IsInstallingUpdate)
+                prompt.ShowInstalling();
+        }
+        model.PropertyChanged += RefreshPrompt;
+        install.Click += async (_, _) =>
+        {
+            if (applying || model.AutomaticUpdateVersion != version) return;
+            applying = true;
+            prompt.BeginUpdate();
+            if (model.IsUpdateDownloaded) prompt.ShowInstalling();
+            else prompt.ShowDownloadProgress(0);
+            try
             {
-                Margin = new Thickness(24),
-                Spacing = 14,
-                Children =
+                await model.ApplyUpdateCommand.ExecuteAsync(null);
+            }
+            finally
+            {
+                applying = false;
+                if (_updatePrompt == prompt)
                 {
-                    new TextBlock { Text = $"发现新版本 v{version}", FontSize = 20, FontWeight = FontWeight.SemiBold },
-                    new TextBlock
-                    {
-                        Text = model.IsUpdateDownloaded ? "更新包已下载并校验。现在重启并安装吗？"
-                            : "现在下载更新包并重启安装吗？",
-                        TextWrapping = TextWrapping.Wrap
-                    },
-                    new ScrollViewer
-                    {
-                        IsVisible = model.HasUpdateChangelog,
-                        MaxHeight = 160,
-                        Content = new TextBlock { Text = model.UpdateChangelog, TextWrapping = TextWrapping.Wrap }
-                    },
-                    new StackPanel
-                    {
-                        Spacing = 8, Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
-                        Children = { later, install }
-                    }
+                    prompt.ShowUpdateAction(model.IsUpdateDownloaded, model.UpdateStatus);
+                    install.IsEnabled = model.AutomaticUpdateVersion == version;
                 }
             }
         };
-        // Keep the consent tied to the version shown, even if a manual check runs behind the prompt.
-        void RefreshInstallButton(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(MainViewModel.CanApplyUpdate))
-                install.IsEnabled = model.AutomaticUpdateVersion == version;
-        }
-        model.PropertyChanged += RefreshInstallButton;
-        install.Click += async (_, _) =>
-        {
-            prompt.Close();
-            if (model.AutomaticUpdateVersion == version) await model.ApplyUpdateCommand.ExecuteAsync(null);
-        };
-        later.Click += (_, _) => prompt.Close();
-        prompt.Opened += (_, _) => later.Focus();
         prompt.Closed += (_, _) =>
         {
-            model.PropertyChanged -= RefreshInstallButton;
+            model.PropertyChanged -= RefreshPrompt;
             _updatePrompt = null;
         };
         _promptedUpdateVersion = version;

@@ -857,11 +857,12 @@ public partial class MainViewModel : ViewModelBase
     // ---------- 命令：开始执行（根据当前选中的模式触发导出） ----------
     [RelayCommand(CanExecute = nameof(CanExport))]
     private Task StartExportAsync()
-        => IsViewSetting || !CanExport ? Task.CompletedTask : StartExportCoreAsync(saveAndClose: SaveAndCloseAfterExport);
+        => IsViewSetting || !CanExport ? Task.CompletedTask : StartExportCoreAsync();
 
-    private async Task StartExportCoreAsync(ExportPresetParameters? preset = null, bool saveAndClose = false)
+    private async Task StartExportCoreAsync(ExportPresetParameters? preset = null)
     {
         var mode = preset?.Mode ?? SelectedMode;
+        var saveAndClose = preset?.SaveAndCloseAfterExport ?? SaveAndCloseAfterExport;
         var pendingRefresh = _statusRefreshTask;
         IsPreparingExport = true;
         IsBusy = true;
@@ -1048,7 +1049,7 @@ public partial class MainViewModel : ViewModelBase
         var naming = preset is null ? ImageName : mode == ExportMode.QuickExport ? preset.ImageName : preset.FilePrefix ?? "";
         var prefix = mode == ExportMode.QuickExport
             ? ""
-            : ExportFilePrefix.Resolve(naming, DocumentName, UseDocumentNameAsFallbackPrefix);
+            : ExportFilePrefix.Resolve(naming, DocumentName, preset?.UseDocumentNameAsFallbackPrefix ?? UseDocumentNameAsFallbackPrefix);
 
         return new ExportSettings
         {

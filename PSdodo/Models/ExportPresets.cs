@@ -9,10 +9,12 @@ public sealed record ExportPresetParameters
     public ExportFormat Format { get; init; } = ExportFormat.Jpg;
     public int Quality { get; init; } = 80;
     public bool AutoRename { get; init; } = true;
+    public bool? SaveAndCloseAfterExport { get; init; }
     public ExportDestination Destination { get; init; } = ExportDestination.DocumentFolder;
     public string CustomPath { get; init; } = "";
     public string ImageName { get; init; } = "";
     public string? FilePrefix { get; init; }
+    public bool? UseDocumentNameAsFallbackPrefix { get; init; }
     public LayerPrefixMode? LayerPrefixMode { get; init; }
     public string SlicePrefix { get; init; } = "";
     public string SliceFolder { get; init; } = "";

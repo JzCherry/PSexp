@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:PsExporter.Controls"
+        xmlns:chrome="clr-namespace:Avalonia.Controls.Chrome;assembly=Avalonia.Controls"
+        x:Class="PsExporter.Views.UpdatePromptWindow"
+        Title="PSexp 软件更新" Icon="/Assets/ico.ico" Width="404" SizeToContent="Height" CanResize="False"
+        Background="Transparent" TransparencyLevelHint="Transparent" WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="-1">
+    <controls:ContinuousBorder Margin="{StaticResource Window.ShadowMargin}" BoxShadow="{StaticResource Shadow.OwnedWindow}"
+        Background="{DynamicResource Brush.Canvas}" CornerRadius="{StaticResource Radius.Lg}">
+        <controls:ContinuousBorder CornerRadius="{StaticResource Radius.Lg}">
+            <Grid RowDefinitions="Auto,Auto,Auto">
+                <controls:ContinuousBorder Background="{DynamicResource Brush.Surface}" Height="{StaticResource Control.CaptionHeight}"
+                    chrome:WindowDecorationProperties.ElementRole="TitleBar">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="软件更新" Classes="subtitle" FontWeight="SemiBold" Margin="16,0" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Classes="tool caption close" Click="OnDismissClick"
+                            chrome:WindowDecorationProperties.ElementRole="CloseButton"
+                            ToolTip.Tip="关闭" AutomationProperties.Name="关闭软件更新窗口">
+                            <Path Classes="caption-glyph" Data="M0 0L12 12 M12 0L0 12" Width="12" Height="12" Stretch="Fill"
+                                StrokeThickness="1.3" Stroke="{Binding $parent[Button].Foreground}"/>
+                        </Button>
+                        <Border Grid.ColumnSpan="2" Height="1" VerticalAlignment="Bottom"
+                            Background="{DynamicResource Brush.Divider}" IsHitTestVisible="False"/>
+                    </Grid>
+                </controls:ContinuousBorder>
+
+                <StackPanel Grid.Row="1" Margin="{StaticResource Padding.Workspace}" Spacing="{StaticResource Space.Sm}">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space.Sm}">
+                        <TextBlock Text="发现新版本" Classes="title" VerticalAlignment="Center"/>
+                        <controls:ContinuousBorder Classes="meta-badge" Background="{DynamicResource Brush.SegmentHover}"
+                            BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}" BorderThickness="1">
+                            <TextBlock x:Name="VersionLabel" Classes="meta-label" FontWeight="SemiBold"
+                                Foreground="{DynamicResource Brush.StatusText}"/>
+                        </controls:ContinuousBorder>
+                    </StackPanel>
+                    <TextBlock x:Name="UpdateDescription" Foreground="{DynamicResource Brush.TextSecondary}"
+                        TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+                    <Grid x:Name="DownloadProgressRow" ColumnDefinitions="*,Auto" ColumnSpacing="{StaticResource Space.Sm}" IsVisible="False">
+                        <ProgressBar x:Name="DownloadProgress" Maximum="100" Height="6" CornerRadius="3"
+                            VerticalAlignment="Center" AutomationProperties.Name="更新下载进度"/>
+                        <TextBlock x:Name="DownloadPercent" Grid.Column="1" MinWidth="36" TextAlignment="Right"
+                            Classes="settings-caption" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                    </Grid>
+                </StackPanel>
+
+                <Border Grid.Row="2" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Divider}"
+                    BorderThickness="0,1,0,0" Padding="{StaticResource Padding.Header}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{StaticResource Space.Sm}">
+                        <Button x:Name="LaterButton" Classes="secondary" Content="稍后" IsCancel="True" Click="OnDismissClick"
+                            VerticalAlignment="Center"/>
+                        <Button x:Name="InstallButton" Classes="primary" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <controls:ContinuousBorder Grid.RowSpan="3" IsHitTestVisible="False" CornerRadius="{StaticResource Radius.Lg}"
+                    BorderBrush="{DynamicResource Brush.OwnedWindowBorder}" BorderThickness="{StaticResource Thickness.Thin}"/>
+            </Grid>
+        </controls:ContinuousBorder>
+    </controls:ContinuousBorder>
+</Window>

@@ -91,7 +91,14 @@ public static class ExportPresetCatalog
     public static ExportPreset BuiltIn(ExportPresetCategory category) => new()
     {
         Id = "default:" + category, Name = "默认预设", Category = category,
-        Parameters = new() { Mode = DefaultMode(category), FilePrefix = category == ExportPresetCategory.Quick ? null : "", LayerPrefixMode = category == ExportPresetCategory.Layers ? LayerPrefixMode.None : null }
+        Parameters = new()
+        {
+            Mode = DefaultMode(category),
+            SaveAndCloseAfterExport = false,
+            FilePrefix = category == ExportPresetCategory.Quick ? null : "",
+            UseDocumentNameAsFallbackPrefix = category == ExportPresetCategory.Quick ? null : false,
+            LayerPrefixMode = category == ExportPresetCategory.Layers ? LayerPrefixMode.None : null
+        }
     };
     public static bool IsBuiltIn(string? id) => id?.StartsWith("default:", StringComparison.Ordinal) == true;
 
@@ -102,10 +109,12 @@ public static class ExportPresetCatalog
         return new()
         {
             Mode = p.Mode, Format = p.Format, Quality = p.Quality, AutoRename = p.AutoRename,
+            SaveAndCloseAfterExport = p.SaveAndCloseAfterExport,
             Destination = preset.IncludeDestination ? p.Destination : ExportDestination.DocumentFolder,
             CustomPath = preset.IncludeDestination && p.Destination == ExportDestination.Custom ? p.CustomPath : "",
             ImageName = preset.IncludeNaming && preset.Category is ExportPresetCategory.Quick or ExportPresetCategory.Layers ? p.ImageName : "",
             FilePrefix = preset.IncludeNaming && preset.Category != ExportPresetCategory.Quick ? p.FilePrefix : null,
+            UseDocumentNameAsFallbackPrefix = preset.IncludeNaming ? p.UseDocumentNameAsFallbackPrefix : null,
             LayerPrefixMode = preset.IncludeNaming && preset.Category == ExportPresetCategory.Layers ? p.LayerPrefixMode : null,
             SlicePrefix = preset.IncludeNaming && preset.Category == ExportPresetCategory.Slices ? p.SlicePrefix : "",
             SliceFolder = preset.Category == ExportPresetCategory.Slices ? p.SliceFolder : "",
@@ -141,6 +150,7 @@ public static class ExportPresetCatalog
             ArtboardPath = Enum.IsDefined(value.ArtboardPath) ? value.ArtboardPath : ExportPathOption.ImageOnly,
             CustomPath = value.CustomPath ?? "", ImageName = category == ExportPresetCategory.Layers ? prefix : value.ImageName ?? "",
             FilePrefix = category == ExportPresetCategory.Quick ? null : prefix,
+            UseDocumentNameAsFallbackPrefix = category == ExportPresetCategory.Quick ? null : value.UseDocumentNameAsFallbackPrefix,
             SlicePrefix = category == ExportPresetCategory.Slices ? prefix : value.SlicePrefix ?? "", SliceFolder = value.SliceFolder ?? "",
             LayerPrefixMode = prefixMode,
             LayerScopeSelectedOnly = category == ExportPresetCategory.Layers ? scope : null,
@@ -157,6 +167,7 @@ public static class ExportPresetCatalog
         var expected = Normalize(preset.Parameters, preset.Category);
         current = Normalize(current, preset.Category);
         if (expected.Format != current.Format || expected.Quality != current.Quality || expected.AutoRename != current.AutoRename) return false;
+        if (expected.SaveAndCloseAfterExport != current.SaveAndCloseAfterExport) return false;
         if (preset.IncludeDestination && (expected.Destination != current.Destination
             || (expected.Destination == ExportDestination.Custom && expected.CustomPath != current.CustomPath))) return false;
         if (preset.Category == ExportPresetCategory.Artboards && (expected.Mode != current.Mode || expected.ArtboardPath != current.ArtboardPath)) return false;
@@ -166,7 +177,8 @@ public static class ExportPresetCatalog
         return preset.Category switch
         {
             ExportPresetCategory.Quick => expected.ImageName == current.ImageName,
-            ExportPresetCategory.Layers or ExportPresetCategory.Artboards or ExportPresetCategory.Slices => expected.FilePrefix == current.FilePrefix,
+            ExportPresetCategory.Layers or ExportPresetCategory.Artboards or ExportPresetCategory.Slices => expected.FilePrefix == current.FilePrefix
+                && expected.UseDocumentNameAsFallbackPrefix == current.UseDocumentNameAsFallbackPrefix,
             _ => true
         };
     }
@@ -198,6 +210,7 @@ public static class ExportPresetCatalog
         var p = item.Parameters;
         if (!item.IncludeDestination) p = p with { Destination = workspace.Destination, CustomPath = workspace.CustomPath };
         if (!item.IncludeNaming) p = p with { ImageName = workspace.ImageName, SlicePrefix = workspace.SlicePrefix,
+            UseDocumentNameAsFallbackPrefix = workspace.UseDocumentNameAsFallbackPrefix,
             LayerWithDocumentName = workspace.LayerWithDocumentName, UseDocumentName = workspace.UseDocumentName, LayerPrefixMode = workspace.LayerPrefixMode, FilePrefix = workspace.FilePrefix };
         var complete = item with { IncludeDestination = true, IncludeNaming = true, Parameters = p };
         return complete with { Parameters = ParametersForPreset(complete) };

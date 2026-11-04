@@ -69,7 +69,7 @@ public sealed class AppSettings
     public bool EnableEdgeSnap { get; set; } = true;
 
     public bool AutoCheckForUpdates { get; set; } = true;
-    public bool AutoDownloadUpdates { get; set; } = true;
+    public bool AutoDownloadUpdates { get; set; }
     public bool CloseToTray { get; set; } = true;
     public bool ShowExportNotice { get; set; } = true;
     public bool ExportTempDocumentsToDesktop { get; set; } = true;
