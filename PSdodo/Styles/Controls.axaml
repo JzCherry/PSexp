@@ -303,7 +303,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
     </Style>
     <Style Selector="controls|ContinuousBorder.settings-search:focus-within">
-        <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
     </Style>
     <Style Selector="TextBox.settings-search-input /template/ Border#PART_BorderElement, TextBox.settings-search-input:pointerover /template/ Border#PART_BorderElement, TextBox.settings-search-input:focus /template/ Border#PART_BorderElement">
         <Setter Property="Background" Value="Transparent"/>
@@ -624,9 +624,9 @@
         <Setter Property="Background" Value="{DynamicResource Brush.SettingsTrack}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
         <Setter Property="IndicatorBrush" Value="{DynamicResource Brush.SettingsSelected}"/>
-        <Setter Property="IndicatorBorderBrush" Value="{StaticResource Brush.Accent}"/>
+        <Setter Property="IndicatorBorderBrush" Value="{DynamicResource Brush.SettingsSelected}"/>
     </Style>
-    <!-- 悬停由轨道绘制，按钮模板不能盖住蓝色选中块。 -->
+    <!-- 悬停由轨道绘制，按钮模板不能盖住选中块。 -->
     <Style Selector="controls|ContinuousBorder.settings-section Button.seg:pointerover /template/ ContentPresenter#PART_ContinuousPresenter, controls|ContinuousBorder.settings-section Button.seg:pressed /template/ ContentPresenter#PART_ContinuousPresenter">
         <Setter Property="Background" Value="Transparent"/>
     </Style>

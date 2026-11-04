@@ -24,6 +24,7 @@ public sealed class AppSettings
 
     public bool DefaultAutoRename { get; set; } = true;
     public bool SaveAndCloseAfterExport { get; set; }
+    public bool UseDocumentNameAsFallbackPrefix { get; set; }
 
     /// <summary>切片文件名前缀，可为空；清空后仍持久保存为空。</summary>
     public string SliceFilePrefix { get; set; } = string.Empty;

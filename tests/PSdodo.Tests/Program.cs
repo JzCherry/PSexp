@@ -71,6 +71,7 @@ try
             DefaultFormat = ExportFormat.Png,
             DefaultQuality = 72,
             DefaultAutoRename = false,
+            UseDocumentNameAsFallbackPrefix = true,
             LayerExportWithDocName = false,
             LayerExportShowHint = true,
             AutoUseDocNameAsPrefix = true,
@@ -92,6 +93,7 @@ try
         Equal(expected.DefaultFormat, loaded.DefaultFormat);
         Equal(expected.DefaultQuality, loaded.DefaultQuality);
         Equal(expected.DefaultAutoRename, loaded.DefaultAutoRename);
+        Equal(expected.UseDocumentNameAsFallbackPrefix, loaded.UseDocumentNameAsFallbackPrefix);
         Equal(expected.LayerExportWithDocName, loaded.LayerExportWithDocName);
         Equal(expected.LayerExportShowHint, loaded.LayerExportShowHint);
         Equal(expected.AutoUseDocNameAsPrefix, loaded.AutoUseDocNameAsPrefix);
@@ -319,6 +321,15 @@ try
             ExportMode.QuickExport, "快速名", "文档.psd", autoUseDocumentName: true));
         Equal(string.Empty, MainViewModel.ResolveLayerImageName(
             ExportMode.Slices, "手动前缀", "文档.psd", autoUseDocumentName: true));
+    });
+
+    Run("Batch export uses the document prefix only when enabled and the input is blank", () =>
+    {
+        Equal("手动前缀", ExportFilePrefix.Resolve(" 手动前缀 ", "文档.psd", useDocumentName: true));
+        Equal("文档.v2", ExportFilePrefix.Resolve("  ", "文档.v2.psd", useDocumentName: true));
+        Equal("未保存文档", ExportFilePrefix.Resolve("", "未保存文档", useDocumentName: true));
+        Equal("", ExportFilePrefix.Resolve("", "文档.psd", useDocumentName: false));
+        Equal("", ExportFilePrefix.Resolve("", "", useDocumentName: true));
     });
 
     Run("Artboard progress shows current and expected count", () =>

@@ -365,6 +365,12 @@
                                                         Classes="output-meta" Orientation="Horizontal" Height="{StaticResource Control.BadgeHeight}"
                                                         Spacing="6"
                                                         VerticalAlignment="Center">
+                                                <Button Classes="compact-action" Classes.active="{Binding UseDocumentNameAsFallbackPrefix}"
+                                                    IsVisible="{Binding IsFilePrefixMode}" Command="{Binding ToggleDocumentNamePrefixCommand}"
+                                                    ToolTip.Tip="{Binding DocumentNamePrefixHint}" AutomationProperties.Name="文档名"
+                                                    AutomationProperties.HelpText="{Binding DocumentNamePrefixHint}">
+                                                    <TextBlock Text="文档名" VerticalAlignment="Center"/>
+                                                </Button>
                                                 <Button Classes="compact-action" Classes.active="{Binding AutoRename}"
                                                     Command="{Binding ToggleAutoRenameCommand}" ToolTip.Tip="{Binding AutoRenameHint}"
                                                     AutomationProperties.Name="同名重命名" AutomationProperties.HelpText="{Binding AutoRenameHint}">
@@ -376,13 +382,13 @@
                                                     AutomationProperties.Name="导出后保存并关闭文档" AutomationProperties.HelpText="{Binding SaveAndCloseHint}">
                                                     <TextBlock Text="保存并关闭" VerticalAlignment="Center"/>
                                                 </Button>
-                                                <controls:ContinuousBorder Background="{StaticResource Brush.Surface}"
-                                                        BorderBrush="{StaticResource Brush.Border}"
+                                                <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
+                                                        BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
                                                         BorderThickness="1"
                                                         IsVisible="{Binding IsJpgFormat}" Classes="meta-badge">
                                                     <TextBlock Text="JPG"
                                                                Classes="micro meta-label"
-                                                               Foreground="{StaticResource Brush.TextSecondary}"
+                                                               Foreground="{DynamicResource Brush.Accent}"
                                                                FontWeight="SemiBold"/>
                                                 </controls:ContinuousBorder>
                                                 <controls:ContinuousBorder Background="{StaticResource Brush.Surface}"
@@ -393,17 +399,6 @@
                                                                Classes="micro meta-label"
                                                                Foreground="{StaticResource Brush.TextSecondary}"
                                                                FontWeight="SemiBold"/>
-                                                </controls:ContinuousBorder>
-                                                <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
-                                                        BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
-                                                        BorderThickness="1"
-                                                        IsVisible="{Binding IsJpgFormat}" Classes="meta-badge">
-                                                    <TextBlock Classes="micro meta-label"
-                                                               Foreground="{DynamicResource Brush.Accent}"
-                                                               FontWeight="SemiBold">
-                                                        <Run Text="{Binding Quality}"/>
-                                                        <Run Text="%"/>
-                                                    </TextBlock>
                                                 </controls:ContinuousBorder>
                                             </StackPanel>
                                         </controls:SegmentOptionRow>
@@ -835,7 +830,7 @@
                         </StackPanel>
                     </ScrollViewer>
                     <!-- 五组分节清单：组标签在卡外，卡片只承载行；图标全部去掉，层级靠字号与字色。 -->
-                    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12"
+                    <Grid x:Name="SettingsContentHost" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12"
                           Margin="0,6,0,12" IsVisible="{Binding IsViewSetting}">
                         <TextBlock Grid.Row="0" Text="设置" Classes="title"
                             Margin="16,0"/>
@@ -848,6 +843,7 @@
                                     Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource Brush.TextMuted}" StrokeThickness="1.4" VerticalAlignment="Center"/>
                                 <TextBox x:Name="SettingsSearchInput" Classes="settings-search-input" Grid.Column="1" Text="{Binding SettingsSearchQuery, Mode=TwoWay}"
                                     PlaceholderText="搜索设置…" AutomationProperties.Name="搜索设置" ToolTip.Tip="搜索名称或用途，例如主题、托盘、更新"
+                                    SelectionBrush="{DynamicResource Brush.SegmentSelected}"
                                     Background="Transparent" BorderThickness="0" Padding="0" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
                                 <TextBlock Grid.Column="2" Text="{Binding SettingsSearchSummary}" IsVisible="{Binding IsSearchingSettings}"
                                     FontSize="{StaticResource FontSize.Caption}" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center"/>
@@ -1263,7 +1259,8 @@
                                                     <TextBlock Text="{Binding UpdateStatus}" Classes="setting-description" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                                     <Button Grid.Column="1" Classes="secondary settings-check-action" Content="检查更新" Command="{Binding CheckForUpdatesCommand}"/>
                                                 </Grid>
-                                                <ProgressBar Minimum="0" Maximum="100" Value="{Binding UpdateProgress}" IsVisible="{Binding IsUpdateBusy}" Height="4"/>
+                                                <ProgressBar Minimum="0" Maximum="100" Value="{Binding UpdateProgress}" IsVisible="{Binding IsUpdateBusy}"
+                                                    Foreground="{DynamicResource Brush.Accent}" Height="4"/>
                                                 <StackPanel Spacing="8" IsVisible="{Binding HasUpdateChangelog}">
                                                     <controls:ContinuousBorder Classes="settings-separator"/>
                                                     <TextBlock Text="更新内容" Classes="setting-label"/>
@@ -1272,6 +1269,7 @@
                                                     </ScrollViewer>
                                                 </StackPanel>
                                                 <Button Classes="primary settings-update-action" Content="{Binding UpdateActionText}" Command="{Binding ApplyUpdateCommand}"
+                                                    Background="{Binding CurrentExportHighlight.Fill}"
                                                     HorizontalAlignment="Right" IsVisible="{Binding IsUpdateAvailable}"/>
                                                 <TextBlock Text="确认重启后安装；导出期间暂不安装。" Classes="settings-caption" IsVisible="{Binding IsUpdateAvailable}" ToolTip.Tip="更新会校验文件并保留旧版备份。"/>
                                             </StackPanel>

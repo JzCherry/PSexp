@@ -70,6 +70,7 @@ public partial class MainViewModel : ViewModelBase
         Quality = s.DefaultQuality;
         AutoRename = s.DefaultAutoRename;
         _saveAndCloseAfterExport = s.SaveAndCloseAfterExport;
+        _useDocumentNameAsFallbackPrefix = s.UseDocumentNameAsFallbackPrefix;
         FileName = s.SliceFilePrefix ?? string.Empty;
         LayerExportRecursive = s.LayerExportRecursive;
         _layerExportSelectedOnly = s.LayerScopeSelectedOnly ?? (s.LayerExportRecursive ? s.LayerExportSelectedOnly : s.LayerTopLevelSelectedOnly);
@@ -216,6 +217,15 @@ public partial class MainViewModel : ViewModelBase
         : "重命名已关闭。同名时覆盖已有文件。";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DocumentNamePrefixHint))]
+    [NotifyPropertyChangedFor(nameof(ImageNamePlaceholder))]
+    [NotifyPropertyChangedFor(nameof(ImageNameHint))]
+    private bool _useDocumentNameAsFallbackPrefix;
+
+    public string DocumentNamePrefixHint => (UseDocumentNameAsFallbackPrefix ? "文档名已开启。" : "文档名已关闭。")
+        + "开启后，文件前缀留空时使用不含扩展名的 Photoshop 文档名。填写了文件前缀时，优先使用填写的内容。";
+
+    [ObservableProperty]
     private string _fileName = string.Empty;
 
     /// <summary>图片命名（通用前缀，支持所有导出模式）</summary>
@@ -271,15 +281,18 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>快速导出图片名称、图层导出文件前缀是否可见</summary>
     public bool IsImageNameVisible => Enum.IsDefined(SelectedMode);
 
-    public string ImageNameLabel => SelectedMode == ExportMode.QuickExport ? "图片名称" : "文件前缀";
+    public bool IsFilePrefixMode => SelectedMode != ExportMode.QuickExport;
+
+    public string ImageNameLabel => IsFilePrefixMode ? "文件前缀" : "图片名称";
 
     public string ImageNamePlaceholder => SelectedMode == ExportMode.QuickExport
         ? "留空使用 Photoshop 默认名称"
-        : "留空使用原名称";
+        : UseDocumentNameAsFallbackPrefix ? "留空使用文档名前缀" : "留空使用原名称";
 
     public string ImageNameHint => SelectedMode == ExportMode.QuickExport
         ? "填写完整图片名称；留空使用 Photoshop 默认名称。"
-        : "留空不加前缀；填写后导出为“前缀_原名”，切片无名称时使用序号。";
+        : (UseDocumentNameAsFallbackPrefix ? "留空使用文档名作为前缀。" : "留空不加前缀。")
+            + "填写后导出为“前缀_原名”，切片无名称时使用序号。";
 
     /// <summary>是否为画板模式（控制导出选项下拉框显示）</summary>
     public bool IsArtboardMode => SelectedMode is ExportMode.AllArtboards or ExportMode.SelectedArtboards;
@@ -435,6 +448,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsLayerMode));
         OnPropertyChanged(nameof(ShowLayerSelection));
         OnPropertyChanged(nameof(IsImageNameVisible));
+        OnPropertyChanged(nameof(IsFilePrefixMode));
         OnPropertyChanged(nameof(ImageNameLabel));
         OnPropertyChanged(nameof(ImageNamePlaceholder));
         OnPropertyChanged(nameof(ImageNameHint));
@@ -663,6 +677,7 @@ public partial class MainViewModel : ViewModelBase
     private void RefreshCanExecute()
     {
         ToggleAutoRenameCommand.NotifyCanExecuteChanged();
+        ToggleDocumentNamePrefixCommand.NotifyCanExecuteChanged();
         StartExportCommand.NotifyCanExecuteChanged();
         CancelExportCommand.NotifyCanExecuteChanged();
         RefreshStatusCommand.NotifyCanExecuteChanged();
@@ -741,6 +756,7 @@ public partial class MainViewModel : ViewModelBase
             DefaultQuality = Math.Clamp(Quality, 1, 100),
             DefaultAutoRename = AutoRename,
             SaveAndCloseAfterExport = SaveAndCloseAfterExport,
+            UseDocumentNameAsFallbackPrefix = UseDocumentNameAsFallbackPrefix,
             SliceFilePrefix = FileName,
             SliceFolderName = SliceFolderName,
             QuickImageName = _quickImageName,
@@ -1030,7 +1046,9 @@ public partial class MainViewModel : ViewModelBase
     private ExportSettings Snapshot(ExportMode mode, ExportPresetParameters? preset)
     {
         var naming = preset is null ? ImageName : mode == ExportMode.QuickExport ? preset.ImageName : preset.FilePrefix ?? "";
-        var prefix = mode == ExportMode.QuickExport ? "" : ExportFilePrefix.Normalize(naming);
+        var prefix = mode == ExportMode.QuickExport
+            ? ""
+            : ExportFilePrefix.Resolve(naming, DocumentName, UseDocumentNameAsFallbackPrefix);
 
         return new ExportSettings
         {
@@ -1121,6 +1139,8 @@ public partial class MainViewModel : ViewModelBase
         SaveBehaviorSettings();
     }
 
+    partial void OnUseDocumentNameAsFallbackPrefixChanged(bool value) => SaveBehaviorSettings();
+
     partial void OnLayerExportShowHintChanged(bool value) => SaveBehaviorSettings();
 
     partial void OnIsCancellingChanged(bool value)
@@ -1153,6 +1173,9 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand(CanExecute = nameof(CanChangeMode))]
     private void ToggleAutoRename() => AutoRename = !AutoRename;
+
+    [RelayCommand(CanExecute = nameof(CanChangeMode))]
+    private void ToggleDocumentNamePrefix() => UseDocumentNameAsFallbackPrefix = !UseDocumentNameAsFallbackPrefix;
 
     [RelayCommand]
     private void SetLayerExportShowHint(object? value) => LayerExportShowHint = ParseBooleanCommandParameter(value);
