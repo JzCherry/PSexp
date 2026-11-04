@@ -3,17 +3,20 @@ using Avalonia.Controls;
 namespace PsExporter.Services;
 internal static class WindowTaskSwitcher
 {
-    internal static void Configure(Window window, bool excluded, bool noActivate = false)
+    internal static bool IsToolWindow(IntPtr handle) => (GetWindowLongPtr(handle, -20).ToInt64() & 0x80L) != 0;
+
+    internal static void Configure(Window window, bool excluded)
     {
         if (window.ShowInTaskbar != !excluded) window.ShowInTaskbar = !excluded;
         if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { } handle) return;
         var originalStyle=GetWindowLongPtr(handle.Handle,-20).ToInt64();
         var style=originalStyle;
         style=excluded ? (style|0x80L)&~0x40000L : (style&~0x80L)|0x40000L;
-        if (noActivate) style|=0x08000000L;
-        if (style == originalStyle) return;
-        SetWindowLongPtr(handle.Handle,-20,new IntPtr(style));
-        SetWindowPos(handle.Handle,IntPtr.Zero,0,0,0,0,0x0001|0x0002|0x0004|0x0010|0x0020);
+        if (style != originalStyle)
+        {
+            SetWindowLongPtr(handle.Handle,-20,new IntPtr(style));
+            SetWindowPos(handle.Handle,IntPtr.Zero,0,0,0,0,0x0001|0x0002|0x0004|0x0010|0x0020);
+        }
     }
     internal static void RaiseWithoutActivation(Window window)
     {

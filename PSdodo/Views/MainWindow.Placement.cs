@@ -181,24 +181,35 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 「唤起跟随鼠标」打开时，把窗口搬到光标所在屏的光标旁边。
+    /// 按设置把窗口放到光标所在屏的对应位置。
     /// 必须在 Show/Activate 之前调用，窗口才会一次落位，不会先出现再跳。
     /// </summary>
-    private void MoveBesidePointer()
+    private void MoveToPointer()
     {
-        if (DataContext is not MainViewModel { SummonAtPointer: true } model) return;
-        if (!GetCursorPos(out var nativeCursor)) return;
-        var cursor = new PixelPoint(nativeCursor.X, nativeCursor.Y);
-        var screen = Screens.ScreenFromPoint(cursor) ?? Screens.Primary;
-        if (screen is null) return;
-        var (widthDip, heightDip) = Bounds.Width > 0 && Bounds.Height > 0 ? (Bounds.Width, Bounds.Height) : model.GetSavedWindowSize();
-        if (widthDip <= 0 || heightDip <= 0) return;
-        var scaling = Math.Max(screen.Scaling, 0.1);
-        var position = SummonPlacement.Beside(cursor,
-            (int)Math.Ceiling(widthDip * scaling), (int)Math.Ceiling(heightDip * scaling),
-            screen.WorkingArea, (int)Math.Round(SummonPlacement.GapDip * scaling));
+        if (!TryGetPointerSummonPlacement(out var position, out _)) return;
         WindowStartupLocation = WindowStartupLocation.Manual;
         Position = position;
+    }
+
+    private bool TryGetPointerSummonPlacement(out PixelPoint position, out Screen screen)
+    {
+        position = default;
+        screen = null!;
+        if (DataContext is not MainViewModel { FollowsPointerOnSummon: true } model
+            || !GetCursorPos(out var nativeCursor)) return false;
+        var cursor = new PixelPoint(nativeCursor.X, nativeCursor.Y);
+        if ((Screens.ScreenFromPoint(cursor) ?? Screens.Primary) is not { } targetScreen) return false;
+        screen = targetScreen;
+        var (widthDip, heightDip) = _edgeLayoutPrepared ? (_edgeWindowSize.Width, _edgeWindowSize.Height)
+            : Bounds.Width > 0 && Bounds.Height > 0 ? (Bounds.Width, Bounds.Height) : model.GetSavedWindowSize();
+        if (widthDip <= 0 || heightDip <= 0) return false;
+        var scaling = Math.Max(screen.Scaling, 0.1);
+        var width = (int)Math.Ceiling(widthDip * scaling);
+        var height = (int)Math.Ceiling(heightDip * scaling);
+        position = model.SummonPointerMode == PointerSummonMode.Center
+            ? SummonPlacement.Centered(cursor, width, height, screen.WorkingArea)
+            : SummonPlacement.Beside(cursor, width, height, screen.WorkingArea, (int)Math.Round(SummonPlacement.GapDip * scaling));
+        return true;
     }
 
     private void PersistWindowPlacement()
@@ -236,6 +247,10 @@ public partial class MainWindow
         _isDocked = false;
         _isDockRevealed = false;
         _dockRevealedByHotkey = false;
+        _dockHadForeground = false;
+        _dockMustFinishRetraction = false;
+        _pointerDockPosition = null;
+        _resummonPointerAfterMotion = false;
         model.IsEdgeDocked = false;
         _placementPrepared = false;
         _placementRestorationCompleted = false;

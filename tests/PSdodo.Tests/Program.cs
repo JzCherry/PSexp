@@ -80,6 +80,8 @@ try
             AutoRefreshOnActivated = false,
             SummonHotkey = "Ctrl+Alt+Shift+F12",
             SummonAtPointer = true,
+            SummonPointerMode = PointerSummonMode.Center,
+            SummonReturnAnimation = true,
             WindowWidth = 1120,
             WindowHeight = 880
         };
@@ -100,6 +102,8 @@ try
         Equal(expected.AutoRefreshOnActivated, loaded.AutoRefreshOnActivated);
         Equal(expected.SummonHotkey, loaded.SummonHotkey);
         Equal(expected.SummonAtPointer, loaded.SummonAtPointer);
+        Equal(PointerSummonMode.Center, loaded.SummonPointerMode);
+        Equal(true, loaded.SummonReturnAnimation);
         Equal(expected.WindowWidth, loaded.WindowWidth);
         Equal(expected.WindowHeight, loaded.WindowHeight);
 
@@ -114,7 +118,14 @@ try
         var reloaded = new SettingsService(settingsPath).Load();
         Equal("", reloaded.SummonHotkey);
         Equal(false, reloaded.SummonAtPointer);
+        Equal(PointerSummonMode.Off, reloaded.SummonPointerMode);
+        Equal(false, reloaded.SummonReturnAnimation);
         Equal(0, reloaded.ExportHighlights.Count);
+
+        File.WriteAllText(settingsPath, """{"summonAtPointer":true}""");
+        Equal(PointerSummonMode.Automatic, service.Load().SummonPointerMode);
+        File.WriteAllText(settingsPath, """{"summonPointerMode":0,"summonAtPointer":true}""");
+        Equal(PointerSummonMode.Off, service.Load().SummonPointerMode);
     });
 
     Run("Export highlight colors remain readable in both themes", () =>
@@ -1118,7 +1129,7 @@ try
         Equal(0xFu, SummonHotkey.NativeModifiers(KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Meta));
     });
 
-    Run("Summon placement keeps the window beside the pointer and fully on screen", () =>
+    Run("Summon placement supports beside and centered positions within the working area", () =>
     {
         var area = new PixelRect(0, 0, 1920, 1080);
         // 默认落在光标右下，留一个空隙。
@@ -1134,6 +1145,11 @@ try
         // 副屏带偏移的工作区：坐标跟着那块屏，不能被拉回主屏。
         var second = new PixelRect(1920, 0, 1920, 1080);
         Equal(new PixelPoint(2516, 516), SummonPlacement.Beside(new PixelPoint(2500, 500), 600, 400, second, 16));
+        Equal(new PixelPoint(2200, 300), SummonPlacement.Centered(new PixelPoint(2500, 500), 600, 400, second));
+        Equal(new PixelPoint(0, 0), SummonPlacement.Centered(new PixelPoint(10, 10), 600, 800, area));
+        Equal(new PixelPoint(1320, 280), SummonPlacement.Centered(new PixelPoint(1919, 1079), 600, 800, area));
+        Equal(new PixelPoint(-1920, 80), SummonPlacement.Centered(new PixelPoint(-1900, 100), 600, 1200,
+            new PixelRect(-1920, 80, 1920, 1000)));
 
         // 逐点核对：只要窗口放得下，就必须整块落在工作区里。
         foreach (var cursor in new[]

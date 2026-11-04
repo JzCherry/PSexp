@@ -81,8 +81,23 @@ public sealed class AppSettings
 
     public string SummonHotkey { get; set; } = DefaultSummonHotkey;
 
-    /// <summary>唤回主窗口时把窗口放到鼠标旁边，而不是回到上次记住的位置。</summary>
+    /// <summary>旧版的跟随鼠标开关，供旧配置迁移与回退版本使用。</summary>
     public bool SummonAtPointer { get; set; }
+
+    private PointerSummonMode? _summonPointerMode;
+    public PointerSummonMode SummonPointerMode
+    {
+        get => _summonPointerMode switch
+        {
+            null => SummonAtPointer ? PointerSummonMode.Automatic : PointerSummonMode.Off,
+            PointerSummonMode.Automatic => PointerSummonMode.Automatic,
+            PointerSummonMode.Center => PointerSummonMode.Center,
+            _ => PointerSummonMode.Off
+        };
+        set => _summonPointerMode = value;
+    }
+
+    public bool SummonReturnAnimation { get; set; }
 
     public WindowPlacementState? WindowPlacement { get; set; }
 

@@ -83,11 +83,12 @@ public partial class MainViewModel : ViewModelBase
         _exportNoticeDurationSeconds = IsExportNoticeDuration(s.ExportNoticeDurationSeconds)
             ? s.ExportNoticeDurationSeconds
             : AppSettings.DefaultExportNoticeDurationSeconds;
-        if (!_showExportNotice) RefreshSettingsSearch();
         _exportNoticeTarget = Enum.IsDefined(s.ExportNoticeTarget) ? s.ExportNoticeTarget : ExportNoticeTarget.OutputFolder;
         DockRetractDelayMs = s.DockRetractDelayMs is 250 or 420 or 800 ? s.DockRetractDelayMs : 420;
         _summonHotkey = Services.SummonHotkey.Normalize(s.SummonHotkey, AppSettings.DefaultSummonHotkey);
-        _summonAtPointer = s.SummonAtPointer;
+        _summonPointerMode = s.SummonPointerMode;
+        _summonReturnAnimation = s.SummonReturnAnimation;
+        RefreshSettingsSearch();
         ReadSilentStartup();
         IsAlwaysOnTop = s.StartAlwaysOnTop;
         AutoRefreshOnActivated = s.AutoRefreshOnActivated;
@@ -772,7 +773,9 @@ public partial class MainViewModel : ViewModelBase
             ExportNoticeTarget = ExportNoticeTarget,
             DockRetractDelayMs = DockRetractDelayMs,
             SummonHotkey = SummonHotkey,
-            SummonAtPointer = SummonAtPointer,
+            SummonAtPointer = FollowsPointerOnSummon,
+            SummonPointerMode = SummonPointerMode,
+            SummonReturnAnimation = SummonReturnAnimation,
             WindowPlacement = _windowPlacement,
             WindowWidth = _windowWidth,
             WindowHeight = _windowHeight

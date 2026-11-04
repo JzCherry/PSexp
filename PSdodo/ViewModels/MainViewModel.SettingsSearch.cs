@@ -16,7 +16,8 @@ public partial class MainViewModel
         new("Edge", "窗口 贴边收纳 屏幕边缘 悬浮入口 自动隐藏 展开 吸附 dock edge"),
         new("Delay", "窗口 贴边收纳 收回等待 延时 延迟 快速 标准 从容 250 420 800 毫秒 delay"),
         new("Hotkey", "窗口 唤起 热键 快捷键 全局 组合键 前台 弹出 面板 按键  summon hotkey shortcut key"),
-        new("Pointer", "窗口 唤起 跟随 鼠标 光标 旁边 出现 位置 移动 pointer mouse cursor follow"),
+        new("Pointer", "窗口 唤起 跟随 鼠标 光标 自动 鼠标中心 居中 旁边 出现 位置 移动 pointer mouse cursor follow center"),
+        new("ReturnAnimation", "窗口 动画跟随 动画 跟随 鼠标 贴边 失焦 回收 返回 收纳 animation return"),
         new("Startup", "开机 静默 启动 登录 自启 后台 托盘 startup login"),
         new("Sync", "Photoshop PS 联动 自动同步 文档识别 读取 置顶 焦点 刷新 document refresh sync"),
         new("Automation", "外部调用 脚本指令 导出指令 导出命令 当前界面 当前参数 当前预设 命令行 自动化 Quicker Windows 运行 PowerShell automation command"),
@@ -45,6 +46,7 @@ public partial class MainViewModel
     public bool ShowDelaySetting => _matchingSettings.Contains("Delay");
     public bool ShowHotkeySetting => _matchingSettings.Contains("Hotkey");
     public bool ShowPointerSetting => _matchingSettings.Contains("Pointer");
+    public bool ShowReturnAnimationSetting => FollowsPointerOnSummon && _matchingSettings.Contains("ReturnAnimation");
     public bool ShowStartupSetting => _matchingSettings.Contains("Startup");
     public bool ShowAutomationCard => _matchingSettings.Contains("Automation");
     public bool ShowTempDestinationCard => _matchingSettings.Contains("TempDestination");
@@ -62,16 +64,18 @@ public partial class MainViewModel
     public bool ShowVersionCard => _matchingSettings.Contains("Version");
     // Settings groups: the card shows when any row inside it matches; each row keeps its own filter.
     public bool ShowAppearanceCard => ShowThemeSetting || ShowHighlightSetting;
-    public bool ShowWindowCard => ShowTraySetting || ShowEdgeSetting || ShowDelaySetting || ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting;
+    private bool ShowPointerSettings => ShowPointerSetting || ShowReturnAnimationSetting;
+    public bool ShowWindowCard => ShowTraySetting || ShowEdgeSetting || ShowDelaySetting || ShowHotkeySetting || ShowPointerSettings || ShowStartupSetting;
     public bool ShowPhotoshopCard => ShowSyncSetting;
     public bool ShowUpdateCard => ShowCheckSetting || ShowDownloadSetting || ShowVersionCard;
     public bool ShowDataCard => ShowDataSetting || ShowLogSetting;
     // A hairline only exists between two rows that are both on screen.
-    public bool ShowTrayEdgeLine => ShowTraySetting && (ShowEdgeSetting || ShowDelaySetting || ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting);
-    public bool ShowEdgeDelayLine => ShowEdgeSetting && (ShowDelaySetting || ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting);
-    public bool ShowDelayHotkeyLine => ShowDelaySetting && (ShowHotkeySetting || ShowPointerSetting || ShowStartupSetting);
-    public bool ShowHotkeyPointerLine => ShowHotkeySetting && (ShowPointerSetting || ShowStartupSetting);
-    public bool ShowPointerStartupLine => ShowPointerSetting && ShowStartupSetting;
+    public bool ShowTrayEdgeLine => ShowTraySetting && (ShowEdgeSetting || ShowDelaySetting || ShowHotkeySetting || ShowPointerSettings || ShowStartupSetting);
+    public bool ShowEdgeDelayLine => ShowEdgeSetting && (ShowDelaySetting || ShowHotkeySetting || ShowPointerSettings || ShowStartupSetting);
+    public bool ShowDelayHotkeyLine => ShowDelaySetting && (ShowHotkeySetting || ShowPointerSettings || ShowStartupSetting);
+    public bool ShowHotkeyPointerLine => ShowHotkeySetting && (ShowPointerSettings || ShowStartupSetting);
+    public bool ShowPointerAnimationLine => ShowPointerSetting && ShowReturnAnimationSetting;
+    public bool ShowPointerStartupLine => ShowPointerSettings && ShowStartupSetting;
     public bool ShowCheckDownloadLine => ShowCheckSetting && (ShowDownloadSetting || ShowVersionCard);
     public bool ShowDownloadVersionLine => ShowDownloadSetting && ShowVersionCard;
     public bool ShowDataLogLine => ShowDataSetting && ShowLogSetting;
@@ -81,7 +85,8 @@ public partial class MainViewModel
     private void RefreshSettingsSearch()
     {
         var words = (SettingsSearchQuery ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        _matchingSettings = SettingsSearchEntries.Where(item => (ShowExportNotice || !item.RequiresExportNotice) && words.All(word =>
+        _matchingSettings = SettingsSearchEntries.Where(item => (ShowExportNotice || !item.RequiresExportNotice)
+                && (item.Key != "ReturnAnimation" || FollowsPointerOnSummon) && words.All(word =>
                 (item.Key == "Version" ? item.Keywords + " " + UpdateVersionLabel : item.Keywords)
                 .Contains(word, StringComparison.OrdinalIgnoreCase)))
             .Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
@@ -90,7 +95,8 @@ public partial class MainViewModel
             nameof(HasSettingsSearchText), nameof(IsSearchingSettings), nameof(HasNoSettingsSearchResults), nameof(SettingsSearchSummary),
             nameof(ShowThemeSetting), nameof(ShowHighlightSetting), nameof(ShowThemeHighlightLine),
             nameof(ShowTraySetting), nameof(ShowEdgeSetting), nameof(ShowDelaySetting), nameof(ShowHotkeySetting),
-            nameof(ShowPointerSetting), nameof(ShowStartupSetting), nameof(ShowPointerStartupLine),
+            nameof(ShowPointerSetting), nameof(ShowReturnAnimationSetting), nameof(ShowPointerAnimationLine),
+            nameof(ShowStartupSetting), nameof(ShowPointerStartupLine),
             nameof(ShowSyncSetting), nameof(ShowAutomationCard), nameof(ShowTempDestinationCard),
             nameof(ShowNoticeSetting), nameof(ShowNoticeDurationSetting), nameof(ShowNoticeTargetSetting),
             nameof(ShowNoticeCard), nameof(ShowNoticeLine), nameof(ShowNoticeDurationLine),

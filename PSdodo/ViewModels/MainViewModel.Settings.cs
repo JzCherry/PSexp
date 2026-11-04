@@ -68,7 +68,10 @@ public partial class MainViewModel
     // ---------- 全局唤起热键 ----------
     [ObservableProperty] private string _summonHotkey = AppSettings.DefaultSummonHotkey;
     [ObservableProperty] private bool _isSummonHotkeyCapturing;
-    [ObservableProperty] private bool _summonAtPointer;
+    [ObservableProperty] private PointerSummonMode _summonPointerMode;
+    [ObservableProperty] private bool _summonReturnAnimation;
+
+    public bool FollowsPointerOnSummon => SummonPointerMode != PointerSummonMode.Off;
 
     /// <summary>窗口层订阅后重新注册系统热键；设置项本身只负责落盘与显示。</summary>
     public event Action? SummonHotkeyRegistrationRequested;
@@ -86,9 +89,16 @@ public partial class MainViewModel
 
     partial void OnIsSummonHotkeyCapturingChanged(bool value) => OnPropertyChanged(nameof(SummonHotkeyDisplay));
 
-    partial void OnSummonAtPointerChanged(bool value) => SaveBehaviorSettings();
+    partial void OnSummonPointerModeChanged(PointerSummonMode value)
+    {
+        SaveBehaviorSettings();
+        RefreshSettingsSearch();
+    }
 
-    [RelayCommand] private void SetSummonAtPointer(object? value) => SummonAtPointer = ParseBooleanCommandParameter(value);
+    partial void OnSummonReturnAnimationChanged(bool value) => SaveBehaviorSettings();
+
+    [RelayCommand] private void SetSummonPointerMode(PointerSummonMode value) => SummonPointerMode = value;
+    [RelayCommand] private void SetSummonReturnAnimation(object? value) => SummonReturnAnimation = ParseBooleanCommandParameter(value);
 
     public string LogFilePath => _fileLogger.LogPath;
     [RelayCommand] private void OpenLogDirectory()

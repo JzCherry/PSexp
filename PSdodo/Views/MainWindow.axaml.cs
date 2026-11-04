@@ -106,7 +106,7 @@ public partial class MainWindow : Window
     {
         // 只约束本窗口动画期间的鼠标激活，不安装全局键鼠钩子。
         if (msg == 0x0021 && _isSnapAnimating) return new IntPtr(3); // WM_MOUSEACTIVATE / MA_NOACTIVATE
-        if (msg == SummonHotkeyMessage)
+        if (msg == SummonHotkeyMessage && wParam.ToInt64() == SummonHotkeyId)
         {
             OnSummonHotkeyMessage();
             return IntPtr.Zero;
@@ -183,7 +183,7 @@ public partial class MainWindow : Window
         _statusAnimationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _statusAnimationTimer.Tick += OnStatusAnimationTimerTick;
 
-        // 只在展开后检测鼠标离开；收纳静止时不轮询。
+        // 只在展开后补查系统焦点和指针；收纳静止时不轮询。
         _edgeHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _edgeHoverTimer.Tick += OnEdgeHoverTimerTick;
 
@@ -694,11 +694,30 @@ public partial class MainWindow : Window
     {
         if (restoreInput) ResetLiveWindowPreparation();
         InvalidateRetractSnapshot();
+        ClearPointerAnimationSurface();
+        if (!retainTexture) DisposePointerAnimationWindow();
         RestoreDockAnimationLayout();
         DockAnimationSurface.MeshData = null;
         if (!retainTexture) DockAnimationSurface.Bitmap = null;
         _genieCapturedBitmap?.Dispose();
         _genieCapturedBitmap = null;
+    }
+
+    private void ClearPointerAnimationSurface()
+    {
+        if (_pointerAnimationActive)
+        {
+            _pointerAnimationActive = false;
+            _pointerAnimationWindow?.Clear();
+        }
+    }
+
+    private void DisposePointerAnimationWindow()
+    {
+        ClearPointerAnimationSurface();
+        var window = _pointerAnimationWindow;
+        _pointerAnimationWindow = null;
+        window?.Dispose();
     }
 
     private void ClearDockRevealBitmap()
@@ -728,7 +747,7 @@ public partial class MainWindow : Window
 
     private void OnDockIconRevealRequested(object? sender, DockIconRevealEventArgs e)
     {
-        if (!_isDocked || _isDockRevealed) return;
+        if (!_isDocked || _isDockRevealed || _pointerDockPosition is not null || _dockMustFinishRetraction) return;
         // 首次拖到边缘时，不能因为刚出现的透明热区恰好落在鼠标下就立即弹回。
         if (_isSnapAnimating && !e.IsClick && !_edgeCanReverseOnPointerReturn) return;
         StartEdgeAnimation(_dockExpandedPos, DockAnimationMotion.RevealDurationMs);
@@ -746,11 +765,15 @@ public partial class MainWindow : Window
         CloseDockIcon();
         ClearDockRevealBitmap();
         WindowTaskSwitcher.Configure(this, excluded: false);
-        if (restoreExpandedPosition) Position = _dockExpandedPos;
+        if (restoreExpandedPosition) Position = DockLivePosition;
         Opacity = 1.0;
         _isDocked = false;
         _isDockRevealed = false;
         _dockRevealedByHotkey = false;
+        _dockHadForeground = false;
+        _dockMustFinishRetraction = false;
+        _pointerDockPosition = null;
+        _resummonPointerAfterMotion = false;
         _dockedEdge = DockEdge.None;
         if (DataContext is MainViewModel vm)
         {
@@ -800,17 +823,20 @@ public partial class MainWindow : Window
 
     private void OnEdgeHoverTimerTick(object? sender, EventArgs e)
     {
-        if (!_isDocked || !_isDockRevealed || _isSnapAnimating || _dockedEdge == DockEdge.None)
+        if (!CanRetractDock() || !_isDockRevealed || _isSnapAnimating)
         {
             _edgeHoverTimer.Stop();
             return;
         }
 
-        if (_nativeMoveStartPosition is not null || !GetCursorPos(out var cursor)) return;
+        if (IsDockWindowForeground()) _dockHadForeground = true;
+        else if (_dockHadForeground || _dockRevealedByHotkey)
+        {
+            TryQueueDockRetraction("deactivated");
+            return;
+        }
 
-        // 收纳态只由图标的 PointerEntered/PointerPressed 触发展开，
-        // 不再使用整条边或隐藏窗口感应带，避免误触。
-        if (!_isDockRevealed) return;
+        if (_dockRevealedByHotkey || _nativeMoveStartPosition is not null || !GetCursorPos(out var cursor)) return;
 
         var insideWindow = IsPointInsideWindow(cursor, _dockExpandedPos, _dockScaling) || IsPointInsideDockIcon(cursor);
 
@@ -871,7 +897,10 @@ public partial class MainWindow : Window
     }
 
     private void OnWindowActivated(object? sender, EventArgs e)
-        => QueueForegroundDocumentProbe();
+    {
+        if (_isDocked && _isDockRevealed) _dockHadForeground = true;
+        QueueForegroundDocumentProbe();
+    }
 
     private void OnPhotoshopDocumentChanged(object? sender, EventArgs e)
     {
@@ -1116,7 +1145,7 @@ public partial class MainWindow : Window
         var wasMinimized = WindowState == WindowState.Minimized;
         // 位置要在这次显示之前定好，窗口只能落位一次；启动恢复那条路径不移动窗口。
         if (wasMinimized) WindowState = WindowState.Normal;
-        if (!keepWindowPosition) MoveBesidePointer();
+        if (!keepWindowPosition) MoveToPointer();
         if (!IsVisible)
             Show();
         UpdateStatusAnimationState(restartActiveClocks: false);

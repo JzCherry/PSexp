@@ -44,7 +44,6 @@ public partial class App : Application
             var mainWindow = new MainWindow
             {
                 DataContext = model,
-                ScriptBridge = provider.GetRequiredService<UxpScriptBridge>(),
             };
             mainWindow.PrepareSavedPlacement();
             InitializeTray(desktop, mainWindow, model, provider.GetRequiredService<FileLogger>());

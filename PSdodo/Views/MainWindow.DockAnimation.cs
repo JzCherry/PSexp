@@ -25,6 +25,7 @@ public partial class MainWindow
     private double _edgeMaxUpdateMs;
     private int _edgeLongIntervals;
     private bool _edgeFirstDrawConfirmed;
+    private bool _edgeStartDesktopReady;
     private string _edgeCaptureSource = "fresh";
     private bool _edgeLayoutPrepared;
     private Size _edgeWindowSize;
@@ -41,6 +42,8 @@ public partial class MainWindow
     private Vector _edgeSourceOffset;
     private double _edgeCanvasWidth;
     private double _edgeCanvasHeight;
+    private PointerDockOverlay? _pointerAnimationWindow;
+    private bool _pointerAnimationActive;
     private SKBitmap? _retractSnapshot;
     private double _retractSnapshotScale;
     private double _retractSnapshotWidth;
@@ -130,7 +133,7 @@ public partial class MainWindow
         _qualityFeedbackClock.Reset();
         StopSettingsPageFade();
         _edgeWindowSize = Bounds.Size;
-        var sourcePosition = hiding ? Position : _dockExpandedPos;
+        var sourcePosition = _pointerDockPosition ?? (hiding ? Position : _dockExpandedPos);
         _edgeCanvasPosition = new PixelPoint(Math.Min(sourcePosition.X, _dockExpandedPos.X), Math.Min(sourcePosition.Y, _dockExpandedPos.Y));
         var geometryScale = Math.Max(_dockScaling, 0.1);
         _edgeMeshOrigin = new Vector((_dockExpandedPos.X - _edgeCanvasPosition.X) / geometryScale, (_dockExpandedPos.Y - _edgeCanvasPosition.Y) / geometryScale);
@@ -152,6 +155,7 @@ public partial class MainWindow
         _edgeCaptureMs = _edgeReadyMs = _edgePrepareMs = _edgeMaxUpdateMs = 0;
         _edgeLongIntervals = 0;
         _edgeFirstDrawConfirmed = false;
+        _edgeStartDesktopReady = false;
         _edgeCaptureSource = "fresh";
         _edgeCanReverseOnPointerReturn = hiding && GetCursorPos(out var cursor)
             && !IsPointInsideWindow(cursor, _dockExpandedPos, _dockScaling);
@@ -173,10 +177,10 @@ public partial class MainWindow
             }
             else
             {
-                // HWND 只在起步前恢复；播放及末尾不再换到另一扇原生窗口。
+                // 提前在目标位置布置主窗口，播放时保持透明。
                 Opacity = 0;
                 WindowTaskSwitcher.Configure(this, excluded: false);
-                Position = _dockExpandedPos;
+                Position = DockLivePosition;
                 RootGrid.UpdateLayout();
                 if (_dockRevealBitmapStale) ClearDockRevealBitmap();
                 _edgeCaptureSource = _dockRevealBitmap is null ? "fresh" : "reveal-cache";
@@ -191,15 +195,47 @@ public partial class MainWindow
                 await FinishEdgeAnimationAsync(generation, hiding);
                 return;
             }
-            ShowDockIcon(hiding ? 0 : 1);
-            PrepareDockAnimationSurface();
-            SetAnimationMesh(hiding ? 0 : 1);
-            DockAnimationSurface.BeginFrameTiming();
-            var firstDraw = DockAnimationSurface.WaitForDrawAsync();
-            Opacity = 1;
-            if (!hiding) WindowTaskSwitcher.RaiseWithoutActivation(this);
-            // 同一个窗口中原子替换界面与网格；首帧回执只作诊断，不在此停住动画。
-            _ = ObserveEdgeFirstDrawAsync(generation, firstDraw);
+            if (_pointerDockPosition is not null && !hiding && _dockIconWindow is { Opacity: > 0 } dockIcon)
+                dockIcon.SetTransition(1);
+            else
+                ShowDockIcon(hiding ? 0 : 1);
+            if (_pointerDockPosition is not null && OperatingSystem.IsWindows() && IsVisible)
+            {
+                try
+                {
+                    (_pointerAnimationWindow ??= new PointerDockOverlay()).Prepare(_genieCapturedBitmap);
+                    _pointerAnimationActive = true;
+                    SetAnimationMesh(hiding ? 0 : 1);
+                }
+                catch (Exception error)
+                {
+                    DisposePointerAnimationWindow();
+                    _animationViewModel?.LogDockAnimation("[dock] 原生动画窗准备失败：" + error.Message, failure: true);
+                }
+            }
+            if (_pointerDockPosition is not null)
+                durationMs = DockAnimationMotion.PointerDuration(hiding, _edgeSourceOffset.Length);
+            if (_pointerAnimationActive)
+            {
+                Opacity = 0;
+                if (hiding)
+                {
+                    // 先让静止的快照接替主窗口，再开始移动，避免两张面板分开一帧。
+                    var desktopReady = await WaitForRenderedBatchAsync(this) && await PointerDockOverlay.WaitForDesktopAsync();
+                    if (generation != _edgeAnimationGeneration || _isClosing) return;
+                    _edgeStartDesktopReady = desktopReady;
+                    _pointerAnimationWindow!.BeginPlaybackTiming();
+                }
+            }
+            else
+            {
+                PrepareDockAnimationSurface();
+                SetAnimationMesh(hiding ? 0 : 1);
+                DockAnimationSurface.BeginFrameTiming();
+                Opacity = 1;
+                if (!hiding) WindowTaskSwitcher.RaiseWithoutActivation(this);
+                _ = ObserveEdgeFirstDrawAsync(generation, DockAnimationSurface.WaitForDrawAsync());
+            }
             _edgeGeometryClock.Restart();
             _edgeMotion.Start(hiding, durationMs);
             _edgePrepareMs = preparing.Elapsed.TotalMilliseconds;
@@ -260,10 +296,10 @@ public partial class MainWindow
         RootGrid.Opacity = 1;
     }
 
-    private async Task ObserveEdgeFirstDrawAsync(int generation, Task<bool> drawn)
+    private async Task ObserveEdgeFirstDrawAsync(int generation, Task<bool> drawn, int timeoutMs = 100)
     {
         var waiting = Stopwatch.StartNew();
-        var ready = await Task.WhenAny(drawn, Task.Delay(100)) == drawn && await drawn;
+        var ready = await Task.WhenAny(drawn, Task.Delay(timeoutMs)) == drawn && await drawn;
         if (generation != _edgeAnimationGeneration || _isClosing) return;
         _edgeFirstDrawConfirmed = ready;
         _edgeReadyMs = waiting.Elapsed.TotalMilliseconds;
@@ -300,7 +336,8 @@ public partial class MainWindow
 
     private void RetargetEdgeAnimation(bool hiding)
     {
-        _edgeMotion.Retarget(hiding, _snapClock.Elapsed.TotalMilliseconds);
+        int? duration = _pointerDockPosition is not null ? DockAnimationMotion.PointerDuration(hiding, _edgeSourceOffset.Length) : null;
+        _edgeMotion.Retarget(hiding, _snapClock.Elapsed.TotalMilliseconds, duration);
         _snapClock.Restart();
         _pointerOutsideDockSince = DateTime.MinValue;
         ScheduleEdgeAnimationFallback(_edgeAnimationGeneration);
@@ -319,8 +356,9 @@ public partial class MainWindow
             cols: 16, rows: 16, peekPx: 0, topology: _animationTopology,
             dockAnchor: anchor, dockSpan: (float)(_dockIconPlacement.SizePx / scale));
         // 首次收纳从真实拖动位置起步，平顺归位；反向仍延续同一条位置轨迹。
-        var alignment = Math.Clamp(_edgeGeometryClock.Elapsed.TotalMilliseconds / 100, 0, 1);
-        alignment = alignment * alignment * (3 - 2 * alignment);
+        // 鼠标唤起的位移随收纳程度往返；普通贴边仍使用原来的 100ms 归位。
+        var settling = Math.Clamp(_edgeGeometryClock.Elapsed.TotalMilliseconds / 100, 0, 1);
+        var alignment = _pointerDockPosition is not null ? collapse : settling * settling * (3 - 2 * settling);
         var offset = _edgeMeshOrigin + _edgeSourceOffset * (1 - alignment);
         if (offset.X != 0 || offset.Y != 0)
             for (var i = 0; i < _animationTopology.Vertices.Length; ++i)
@@ -328,13 +366,37 @@ public partial class MainWindow
                 var point = _animationTopology.Vertices[i];
                 _animationTopology.Vertices[i] = new SKPoint(point.X + (float)offset.X, point.Y + (float)offset.Y);
             }
-        DockAnimationSurface.MeshData = _animationTopology;
-        DockAnimationSurface.MeshOpacity = DockAnimationMotion.MeshVisibility(collapse);
+        if (_pointerAnimationActive)
+        {
+            var visible = _pointerAnimationWindow!.Draw(_animationTopology, _edgeCanvasPosition, scale,
+                DockAnimationMotion.PointerMeshVisibility(collapse));
+            if (visible && !_edgeFirstDrawConfirmed)
+            {
+                _edgeFirstDrawConfirmed = true;
+                _edgeReadyMs = _edgePlaybackClock.Elapsed.TotalMilliseconds;
+            }
+        }
+        else
+        {
+            DockAnimationSurface.MeshData = _animationTopology;
+            DockAnimationSurface.MeshOpacity = DockAnimationMotion.MeshVisibility(collapse);
+        }
         _dockIconWindow?.SetTransition(collapse);
     }
 
     private void QueueEdgeFrame(int generation)
-        => RequestAnimationFrame(_ => AdvanceEdgeFrame(generation));
+    {
+        if (_pointerAnimationActive)
+            _ = QueuePointerFrameAsync(generation);
+        else
+            RequestAnimationFrame(_ => AdvanceEdgeFrame(generation));
+    }
+
+    private async Task QueuePointerFrameAsync(int generation)
+    {
+        await PointerDockOverlay.WaitForFrameAsync().ConfigureAwait(false);
+        Dispatcher.UIThread.Post(() => AdvanceEdgeFrame(generation), DispatcherPriority.Render);
+    }
 
     private void ScheduleEdgeAnimationFallback(int generation)
         => _ = EnsureEdgeAnimationCompletesAsync(generation, ++_edgeMotionRevision, _edgeMotion.DurationMs);
@@ -350,7 +412,7 @@ public partial class MainWindow
 
     private void UpdateEdgeAnimationIntentFromPointer()
     {
-        if (!GetCursorPos(out var cursor)) return;
+        if (_dockMustFinishRetraction || _pointerDockPosition is not null || !GetCursorPos(out var cursor)) return;
         var inside = IsPointInsideWindow(cursor, _dockExpandedPos, _dockScaling) || IsPointInsideDockIcon(cursor);
         if (_edgeMotion.IsHiding)
         {
@@ -408,6 +470,7 @@ public partial class MainWindow
         {
             Debug.WriteLine("收纳帧失败: " + error);
             if (DataContext is MainViewModel diagnostics) diagnostics.LogDockAnimation("[dock] frame failed: " + error, failure: true);
+            if (_pointerAnimationActive) DisposePointerAnimationWindow();
             await FinishEdgeAnimationAsync(generation, _edgeMotion.IsHiding);
         }
     }
@@ -420,7 +483,8 @@ public partial class MainWindow
         _snapClock.Stop();
         _edgePlaybackClock.Stop();
         _edgeGeometryClock.Stop();
-        var renderTiming = DockAnimationSurface.FrameTimingSummary;
+        var renderTiming = _pointerAnimationActive ? _pointerAnimationWindow!.FrameTimingSummary : DockAnimationSurface.FrameTimingSummary;
+        var usesPointerSurface = _pointerAnimationActive;
         ClearDockRevealBitmap();
         _dockRevealBitmap = _genieCapturedBitmap;
         _dockRevealBitmapStale = _edgeCapturedSceneRevision != _edgeSceneRevision;
@@ -437,21 +501,42 @@ public partial class MainWindow
         }
         else
         {
-            // 这两项在同一棵视觉树、同一个合成批次生效，旧帧或新帧都完整。
-            // 不再等待一张静止的末帧，也没有透明 HWND 与动画 HWND 的呈现竞态。
-            ClearDockAnimationSurface(retainTexture: true, restoreInput: false);
-            Position = _dockExpandedPos;
+            // 分层窗保留最后一帧，等主窗口完成绘制后再隐藏。
+            if (usesPointerSurface)
+            {
+                try { SetAnimationMesh(0); }
+                catch (Exception error)
+                {
+                    DisposePointerAnimationWindow();
+                    _animationViewModel?.LogDockAnimation("[dock] final overlay frame failed: " + error, failure: true);
+                }
+            }
+            else
+            {
+                ClearDockAnimationSurface(retainTexture: true, restoreInput: false);
+                Position = DockLivePosition;
+            }
             Opacity = 1;
             CloseDockIcon();
         }
         var swapMs = handoff.Elapsed.TotalMilliseconds;
-        // 画面已经切回：此处仅延后输入/文档探针，不延长动画视觉尾段。
         var liveFrameDrawn = hiding || await WaitForRenderedBatchAsync(this);
         if (generation != _edgeAnimationGeneration || _isClosing) return;
+        var desktopHandoff = usesPointerSurface && (hiding
+            ? _edgeStartDesktopReady
+            : _pointerAnimationActive && liveFrameDrawn && await PointerDockOverlay.WaitForDesktopAsync());
+        if (generation != _edgeAnimationGeneration || _isClosing) return;
+        if (!hiding && usesPointerSurface)
+            ClearDockAnimationSurface(retainTexture: true, restoreInput: false);
         ResetLiveWindowPreparation();
         var report = FormattableString.Invariant(
-            $"[dock] renderer=single-window capture_pipeline=visual-brush direction={(hiding ? "hide" : "reveal")} capture={_edgeCaptureSource} capture_ms={_edgeCaptureMs:F1} capture_scale={_captureScale:F2} dock_scale={_dockScaling:F2} window_dip={_edgeWindowSize.Width:F2}x{_edgeWindowSize.Height:F2} texture_px={_dockRevealBitmap?.Width ?? 0}x{_dockRevealBitmap?.Height ?? 0} ready_ms={_edgeReadyMs:F1} first_draw={_edgeFirstDrawConfirmed} prepare_ms={_edgePrepareMs:F1} live_frame={liveFrameDrawn} playback_ms={_edgePlaybackClock.Elapsed.TotalMilliseconds:F1} swap_ms={swapMs:F1} settle_ms={handoff.Elapsed.TotalMilliseconds - swapMs:F1} ui_frames={_frameCount} ui_max_gap_ms={_maxFrameGapMs:F1} ui_gaps_over_25ms={_edgeLongIntervals} ui_update_max_ms={_edgeMaxUpdateMs:F2} {renderTiming}");
-        if (DataContext is MainViewModel diagnosticModel) diagnosticModel.LogDockAnimation(report);
+            $"[dock] renderer={(usesPointerSurface ? "native-layered" : "single-window")} capture_pipeline=visual-brush direction={(hiding ? "hide" : "reveal")} capture={_edgeCaptureSource} capture_ms={_edgeCaptureMs:F1} capture_scale={_captureScale:F2} dock_scale={_dockScaling:F2} window_dip={_edgeWindowSize.Width:F2}x{_edgeWindowSize.Height:F2} texture_px={_dockRevealBitmap?.Width ?? 0}x{_dockRevealBitmap?.Height ?? 0} ready_ms={_edgeReadyMs:F1} first_draw={_edgeFirstDrawConfirmed} prepare_ms={_edgePrepareMs:F1} live_frame={liveFrameDrawn} playback_ms={_edgePlaybackClock.Elapsed.TotalMilliseconds:F1} swap_ms={swapMs:F1} settle_ms={handoff.Elapsed.TotalMilliseconds - swapMs:F1} ui_frames={_frameCount} ui_max_gap_ms={_maxFrameGapMs:F1} ui_gaps_over_25ms={_edgeLongIntervals} ui_update_max_ms={_edgeMaxUpdateMs:F2} {renderTiming}");
+        if (DataContext is MainViewModel diagnosticModel)
+        {
+            var path = usesPointerSurface ? FormattableString.Invariant(
+                $" pointer_surface=overlay desktop_handoff={desktopHandoff} travel_dip={_edgeSourceOffset.Length:F0} canvas_dip={_edgeCanvasWidth:F0}x{_edgeCanvasHeight:F0}") : "";
+            diagnosticModel.LogDockAnimation(report + path);
+        }
         _isSnapAnimating = false;
         _isEdgeFinishing = false;
         _animationViewModel?.SetWindowAnimationActive(false);
@@ -463,13 +548,26 @@ public partial class MainWindow
             return;
         }
         _isDockRevealed = !hiding;
-        if (hiding) _dockRevealedByHotkey = false;
+        _dockMustFinishRetraction = false;
+        if (hiding)
+        {
+            _dockRevealedByHotkey = false;
+            _dockHadForeground = false;
+            _pointerDockPosition = null;
+        }
+        if (_resummonPointerAfterMotion)
+        {
+            _resummonPointerAfterMotion = false;
+            SummonFromHotkey();
+            if (_isSnapAnimating) return;
+        }
         QueueForegroundDocumentProbe();
         UpdateStatusAnimationState(restartActiveClocks: false);
         if (_isDocked && _isDockRevealed)
         {
-            if (!_dockRevealedByHotkey) _edgeHoverTimer.Start();
-            else if (!IsActive) TryQueueDockRetraction("deactivated");
+            _edgeHoverTimer.Start();
+            if ((_dockRevealedByHotkey || _dockHadForeground) && !IsDockWindowForeground())
+                TryQueueDockRetraction("deactivated");
         }
         _ = SavePlacementAfterDockMotionAsync(generation);
     }

@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using PsExporter.Services;
 
 namespace PsExporter.Core.PsConnection;
 
@@ -20,11 +21,6 @@ public sealed class UxpScriptBridge
     private const int DispatchDelayMs = 500;
     private const int CleanupDelayMs = 2_000;
     private sealed record DispatchFocus(IntPtr Window, uint InputTick);
-    private DispatchFocus? _dispatchFocus;
-
-    internal bool IsPhotoshopDispatchDeactivation(IntPtr window)
-        => Volatile.Read(ref _dispatchFocus) is { } focus
-            && focus.Window == window && FindPhotoshopFocusHandoff(focus) != IntPtr.Zero;
 
     /// <summary>
     /// 执行 UXP 脚本：写入临时 .psjs 文件（UTF8 BOM），用文件关联打开。
@@ -46,7 +42,6 @@ public sealed class UxpScriptBridge
         {
             ct.ThrowIfCancellationRequested();
             focus = OperatingSystem.IsWindows() ? CaptureDispatchFocus() : null;
-            if (focus is not null) Volatile.Write(ref _dispatchFocus, focus);
             if (OperatingSystem.IsWindows())
                 await StaHelper.RunAsync(() => DispatchWithoutActivation(tempFile), ct);
             else
@@ -81,10 +76,6 @@ public sealed class UxpScriptBridge
                 Success = false,
                 Error = ex
             };
-        }
-        finally
-        {
-            if (focus is not null) Interlocked.CompareExchange(ref _dispatchFocus, null, focus);
         }
     }
 
@@ -122,7 +113,8 @@ public sealed class UxpScriptBridge
         if (foreground == IntPtr.Zero || GetWindow(foreground, owner) != IntPtr.Zero) return;
 
         _ = GetWindowThreadProcessId(before.Window, out var processId);
-        if (processId == (uint)Environment.ProcessId && GetForegroundWindow() == foreground)
+        if (processId == (uint)Environment.ProcessId && GetForegroundWindow() == foreground
+            && !WindowTaskSwitcher.IsToolWindow(before.Window))
             _ = SetForegroundWindow(before.Window);
     }
 

@@ -1018,23 +1018,41 @@
                                             </Grid>
                                             <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowHotkeyPointerLine}"/>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowPointerSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="唤起跟随鼠标" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="开启后唤回主窗口时，窗口出现在鼠标旁边；关闭时回到上次记住的位置。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding SummonAtPointer}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetSummonAtPointerCommand}" CommandParameter="False" AutomationProperties.Name="唤起跟随鼠标：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding SummonAtPointer, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetSummonAtPointerCommand}" CommandParameter="True" AutomationProperties.Name="唤起跟随鼠标：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding SummonAtPointer, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
+                                                <TextBlock Text="唤起跟随鼠标" Classes="setting-label" VerticalAlignment="Center"
+                                                           ToolTip.Tip="选择唤回主窗口时的位置。"/>
+                                                <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center"
+                                                                               SelectionValue="{Binding SummonPointerMode}">
+                                                    <controls:SegmentPanel>
+                                                        <Button Classes="seg" Command="{Binding SetSummonPointerModeCommand}" CommandParameter="{x:Static models:PointerSummonMode.Off}"
+                                                                AutomationProperties.Name="唤起跟随鼠标：关闭" ToolTip.Tip="在原位置唤回窗口">
+                                                            <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding SummonPointerMode, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:PointerSummonMode.Off}}"/>
+                                                        </Button>
+                                                        <Button Classes="seg" Command="{Binding SetSummonPointerModeCommand}" CommandParameter="{x:Static models:PointerSummonMode.Automatic}"
+                                                                AutomationProperties.Name="唤起跟随鼠标：自动" ToolTip.Tip="根据屏幕空间选择鼠标旁的位置">
+                                                            <TextBlock Text="自动" Classes="mode-label" Foreground="{Binding SummonPointerMode, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:PointerSummonMode.Automatic}}"/>
+                                                        </Button>
+                                                        <Button Classes="seg" Command="{Binding SetSummonPointerModeCommand}" CommandParameter="{x:Static models:PointerSummonMode.Center}"
+                                                                AutomationProperties.Name="唤起跟随鼠标：鼠标中心" ToolTip.Tip="以鼠标为窗口中心，靠近屏幕边缘时自动向内调整">
+                                                            <TextBlock Text="鼠标中心" Classes="mode-label" Foreground="{Binding SummonPointerMode, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter={x:Static models:PointerSummonMode.Center}}"/>
+                                                        </Button>
+                                                    </controls:SegmentPanel>
+                                                </controls:AnimatedSegmentTrack>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowPointerAnimationLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowReturnAnimationSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="动画跟随" Classes="setting-label" VerticalAlignment="Center"
+                                                           ToolTip.Tip="贴边收纳后，在同一屏幕内按热键，窗口会沿动画移到唤起位置。切换到其他应用时，沿动画回到原贴边入口。"/>
+                                                <controls:AnimatedSegmentTrack Grid.Column="1" Classes="choice-track" VerticalAlignment="Center"
+                                                                               SelectionValue="{Binding SummonReturnAnimation}">
+                                                    <controls:SegmentPanel>
+                                                        <Button Classes="seg" Command="{Binding SetSummonReturnAnimationCommand}" CommandParameter="False" AutomationProperties.Name="动画跟随：关闭">
+                                                            <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding SummonReturnAnimation, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
+                                                        </Button>
+                                                        <Button Classes="seg" Command="{Binding SetSummonReturnAnimationCommand}" CommandParameter="True" AutomationProperties.Name="动画跟随：开启">
+                                                            <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding SummonReturnAnimation, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
+                                                        </Button>
+                                                    </controls:SegmentPanel>
+                                                </controls:AnimatedSegmentTrack>
                                             </Grid>
                                             <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowPointerStartupLine}"/>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowStartupSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">

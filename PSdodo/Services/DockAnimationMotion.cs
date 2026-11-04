@@ -27,11 +27,14 @@ internal sealed class DockAnimationMotion
         => SetTrajectory(hiding ? 0 : 1,
             (hiding ? 0.9 : -1.65) / Math.Max(1, durationMs), hiding, durationMs);
 
-    internal void Retarget(bool hiding, double elapsedMs)
+    internal static int PointerDuration(bool hiding, double distanceDip)
+        => (hiding ? 180 : 165) + (int)Math.Round(Math.Clamp(distanceDip * 0.04, 0, 40));
+
+    internal void Retarget(bool hiding, double elapsedMs, int? durationMs = null)
     {
         var current = Sample(elapsedMs);
         SetTrajectory(current.Collapse, current.Velocity, hiding,
-            hiding ? HideDurationMs : RevealDurationMs);
+            durationMs ?? (hiding ? HideDurationMs : RevealDurationMs));
     }
 
     private void SetTrajectory(double start, double velocity, bool hiding, int durationMs)
@@ -101,8 +104,14 @@ internal sealed class DockAnimationMotion
     }
 
     internal static double MeshVisibility(double collapse)
+        => MeshVisibility(collapse, 0.84);
+
+    internal static double PointerMeshVisibility(double collapse)
+        => MeshVisibility(collapse, 0.72);
+
+    private static double MeshVisibility(double collapse, double fadeStart)
     {
-        var t = Math.Clamp((collapse - 0.84) / 0.16, 0, 1);
+        var t = Math.Clamp((collapse - fadeStart) / (1 - fadeStart), 0, 1);
         return 1 - t * t * (3 - 2 * t);
     }
 }

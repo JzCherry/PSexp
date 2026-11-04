@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -15,6 +16,9 @@ public partial class MainWindow
     private const int SummonHotkeyId = 0x51E7;
     private bool _summonHotkeyAttached;
     private bool _dockRevealedByHotkey;
+    private PixelPoint? _pointerDockPosition;
+    private bool _resummonPointerAfterMotion;
+    private PixelPoint DockLivePosition => _pointerDockPosition ?? _dockExpandedPos;
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -71,11 +75,18 @@ public partial class MainWindow
         if (!SummonHotkey.TryParse(model.SummonHotkey, out var key, out var modifiers)
             || !SummonHotkey.TryGetVirtualKey(key, out var virtualKey))
             return;
-        if (RegisterHotKey(hwnd, SummonHotkeyId, SummonHotkey.NativeModifiers(modifiers), virtualKey)) return;
+        if (RegisterHotKey(hwnd, SummonHotkeyId, SummonHotkey.NativeModifiers(modifiers), virtualKey))
+        {
+            model.LogDockAnimation($"[hotkey] registered key={model.SummonHotkey}");
+            return;
+        }
 
-        model.AppendLog("Error", $"唤起热键 {model.SummonHotkey} 注册失败（Win32 {Marshal.GetLastPInvokeError()}）");
+        var error = Marshal.GetLastPInvokeError();
+        model.AppendLog("Error", $"唤起热键 {model.SummonHotkey} 注册失败（Win32 {error}）");
         // 设置项写入还在栈上，提示挪到下一帧再落，避免边写边读同一状态。
-        ReportSummonHotkeyStatus(model, $"唤起热键 {model.SummonHotkey} 已被其他程序占用");
+        ReportSummonHotkeyStatus(model, error == 1409
+            ? $"唤起热键 {model.SummonHotkey} 已被其他程序占用"
+            : $"唤起热键 {model.SummonHotkey} 注册失败（Win32 {error}）");
     }
 
     private void OnSummonHotkeyClick(object? sender, RoutedEventArgs e)
@@ -131,7 +142,12 @@ public partial class MainWindow
             : "唤起热键只支持字母、数字、小键盘数字和 F1–F12");
     }
 
-    private void OnSummonHotkeyMessage() => Dispatcher.UIThread.Post(SummonFromHotkey);
+    private void OnSummonHotkeyMessage() => Dispatcher.UIThread.Post(() =>
+    {
+        _animationViewModel?.LogDockAnimation(
+            $"[hotkey] received key={_animationViewModel.SummonHotkey} docked={_isDocked} animating={_isSnapAnimating}");
+        SummonFromHotkey();
+    });
 
     private void SummonFromHotkey()
     {
@@ -141,8 +157,15 @@ public partial class MainWindow
             ActivateAfterPlacementRestore(SummonFromHotkey);
             return;
         }
-        if (DataContext is MainViewModel { SummonAtPointer: true })
+        if (DataContext is MainViewModel { FollowsPointerOnSummon: true } model)
         {
+            if (_isDocked && model.EnableEdgeSnap && model.SummonReturnAnimation
+                && TryGetPointerSummonPlacement(out var position, out var screen)
+                && screen.Bounds == Screens.ScreenFromPoint(_dockExpandedPos)?.Bounds)
+            {
+                SummonDockAtPointer(position);
+                return;
+            }
             ActivateFromExternalRequest();
             return;
         }
@@ -156,6 +179,29 @@ public partial class MainWindow
         }
         if (!IsVisible || WindowState == WindowState.Minimized)
             ActivateFromExternalRequest(keepWindowPosition: true);
+    }
+
+    private void SummonDockAtPointer(PixelPoint position)
+    {
+        if (_isSnapAnimating)
+        {
+            _resummonPointerAfterMotion = true;
+            return;
+        }
+        if (_pointerDockPosition is not null && _isDockRevealed && !IsDockWindowForeground())
+        {
+            // 热键可能先于失焦后的收纳请求到达，先收回，再从原入口展开。
+            _resummonPointerAfterMotion = true;
+            StartEdgeAnimation(_dockHiddenPos, DockAnimationMotion.HideDurationMs);
+            return;
+        }
+        _pointerDockPosition = position;
+        _dockRevealedByHotkey = true;
+        _edgeHoverTimer.Stop();
+        if (_isDockRevealed) Position = position;
+        else StartEdgeAnimation(_dockExpandedPos, DockAnimationMotion.RevealDurationMs);
+        BringToForeground();
+        if (!_isSnapAnimating) _edgeHoverTimer.Start();
     }
 
     private static void ReportSummonHotkeyStatus(MainViewModel model, string text)

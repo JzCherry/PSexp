@@ -1,9 +1,7 @@
 using System;
-using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using PsExporter.Core.PsConnection;
 using PsExporter.Services;
 using PsExporter.ViewModels;
 
@@ -11,19 +9,18 @@ namespace PsExporter.Views;
 
 public partial class MainWindow
 {
-    internal UxpScriptBridge? ScriptBridge { get; init; }
-
     private bool _dockRetractionQueued;
     private bool _dockRetractionRequiresInactive;
     private string _dockRetractionReason = "";
+    private bool _dockHadForeground;
+    private bool _dockMustFinishRetraction;
 
     private void OnWindowDeactivated(object? sender, EventArgs e)
     {
         _exportEnterHeld = false;
         _hasProbedCurrentActivation = false;
         EndInputEditing();
-        // 起步/交接时恢复任务栏样式可能短暂失活，不能把内部呈现调整当成点击外部。
-        if (_isDocked && _isDockRevealed && (!_isSnapAnimating || _snapClock.IsRunning))
+        if (_isDocked && _isDockRevealed)
             TryQueueDockRetraction("deactivated");
         if (!_isSnapAnimating && !_dockRetractionQueued && DataContext is MainViewModel model)
             model.FlushParameterMemory();
@@ -63,15 +60,8 @@ public partial class MainWindow
             var source = _dockRetractionReason;
             _dockRetractionQueued = false;
             if (!CanRetractDock() || generation != _edgeAnimationGeneration) return;
-            // 文件选择框、更新确认框及本程序菜单不应使父窗口自动收纳。
-            if (inactiveOnly && (IsActive || IsForegroundOwnedByThisApplication())) return;
-            if (inactiveOnly && TryGetPlatformHandle() is { } window &&
-                ScriptBridge?.IsPhotoshopDispatchDeactivation(window.Handle) == true)
-            {
-                if (DataContext is MainViewModel model)
-                    model.LogDockAnimation("[dock] 保持展开：Photoshop 脚本派发引起的失焦");
-                return;
-            }
+            // 只比较主窗口自身。Avalonia 的激活状态有时会晚于系统焦点变化。
+            if (inactiveOnly && IsDockWindowForeground()) return;
             if (DataContext is MainViewModel diagnostics)
                 diagnostics.LogDockAnimation($"[dock] retract-request source={source} state={WindowState} active={IsActive}");
             if (WindowState == WindowState.Minimized)
@@ -82,7 +72,7 @@ public partial class MainWindow
                     _ = ShowWindow(handle.Handle, 4); // SW_SHOWNOACTIVATE，避免恢复时抢走其他应用焦点。
                 else
                     WindowState = WindowState.Normal;
-                Position = _isSnapAnimating ? _edgeCanvasPosition : _dockExpandedPos;
+                Position = _isSnapAnimating && !_pointerAnimationActive ? _edgeCanvasPosition : DockLivePosition;
                 if (_isSnapAnimating) Opacity = animationOpacity;
             }
             if (!_isDockRevealed && !_isSnapAnimating)
@@ -93,26 +83,13 @@ public partial class MainWindow
                 ShowDockIcon();
                 return;
             }
+            _dockMustFinishRetraction = true;
             StartEdgeAnimation(_dockHiddenPos, DockAnimationMotion.HideDurationMs);
-            // 明确离开/最小化的意图不能被尚未移出原感应区的指针立即反向。
-            _edgeCanReverseOnPointerReturn = false;
         });
         return true;
     }
 
-    private bool IsForegroundOwnedByThisApplication()
-    {
-        if (!OperatingSystem.IsWindows()) return OwnedWindows.Count > 0;
-        var foreground = GetForegroundWindow();
-        if (foreground == IntPtr.Zero) return false;
-        _ = GetWindowThreadProcessId(foreground, out var processId);
-        if (processId == (uint)Environment.ProcessId) return true;
-        var owner = GetAncestor(foreground, 3); // GA_ROOTOWNER
-        return owner != IntPtr.Zero && owner == TryGetPlatformHandle()?.Handle;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    private bool IsDockWindowForeground() => OperatingSystem.IsWindows()
+        ? TryGetPlatformHandle() is { } handle && GetForegroundWindow() == handle.Handle
+        : IsActive;
 }
