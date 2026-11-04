@@ -79,8 +79,11 @@ public sealed class AppSettings
 
     /// <summary>系统级唤起热键的默认组合；空串表示不注册热键。</summary>
     public const string DefaultSummonHotkey = "Ctrl+Alt+E";
+    public const string DefaultSummonHotkeyProgram = "Photoshop.exe";
 
     public string SummonHotkey { get; set; } = DefaultSummonHotkey;
+    /// <summary>Photoshop.exe 表示任意安装位置的 Photoshop，空字符串表示全局，其他值为 EXE 路径。</summary>
+    public string SummonHotkeyProgram { get; set; } = DefaultSummonHotkeyProgram;
 
     /// <summary>旧版的跟随鼠标开关，供旧配置迁移与回退版本使用。</summary>
     public bool SummonAtPointer { get; set; }

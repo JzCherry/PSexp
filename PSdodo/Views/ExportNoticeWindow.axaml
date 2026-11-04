@@ -2,36 +2,54 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:PsExporter.Controls"
         x:Class="PsExporter.Views.ExportNoticeWindow"
-        Title="导出完成" Width="364" Height="92" CanResize="False"
+        Title="导出提示" Width="364" Height="92" CanResize="False"
         WindowDecorations="None" TransparencyLevelHint="Transparent" Background="Transparent"
         ShowActivated="False" ShowInTaskbar="False" Topmost="True">
     <controls:ContinuousBorder Margin="{StaticResource Window.ShadowMargin}"
         CornerRadius="{StaticResource Radius.ExportNotice}" BoxShadow="{StaticResource Shadow.OwnedWindow}">
-        <Button x:Name="OpenNoticeDirectory" Click="OnOpenClick" Height="68" MinHeight="68" MaxHeight="68"
-            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-            Padding="16,0,18,0" CornerRadius="{StaticResource Radius.ExportNotice}"
-            Background="{DynamicResource Brush.SettingsCard}" BorderBrush="{DynamicResource Brush.OwnedWindowBorder}">
-            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto"
-                ColumnSpacing="{StaticResource Space.Sm}" RowSpacing="{StaticResource Space.Xs}">
-                <controls:ContinuousBorder Grid.RowSpan="2" Width="30" Height="30" VerticalAlignment="Center"
-                    CornerRadius="{StaticResource Radius.SettingsCard}" Background="{DynamicResource Brush.StatusSurface}">
-                    <Path Data="M2 8L6 12L14 4" Width="14" Height="14" Stretch="Uniform"
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Stroke="{DynamicResource Brush.StatusText}" StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"/>
-                </controls:ContinuousBorder>
-                <TextBlock x:Name="NoticeTitle" Grid.Column="1" Classes="setting-label" FontWeight="SemiBold"
-                    VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                    AutomationProperties.LiveSetting="Polite"/>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <TextBlock x:Name="NoticeAction" Classes="settings-caption" FontWeight="SemiBold"
-                        Foreground="{DynamicResource Brush.StatusText}" VerticalAlignment="Center"/>
-                    <Path Data="M1 1L5 5L1 9" Width="5" Height="10" Stretch="Uniform" VerticalAlignment="Center"
-                        Stroke="{DynamicResource Brush.StatusText}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"/>
-                </StackPanel>
-                <TextBlock x:Name="NoticePath" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
-                    Classes="settings-caption" Foreground="{DynamicResource Brush.TextSecondary}"
-                    TextWrapping="NoWrap" TextTrimming="PathSegmentEllipsis"/>
-            </Grid>
-        </Button>
+        <!-- 卡片与进度条是同宽重叠的两层：条贴卡底，不参与卡片内部行高，切换状态不会重排。 -->
+        <Panel>
+            <Button x:Name="OpenNoticeDirectory" Click="OnOpenClick" Height="68" MinHeight="68" MaxHeight="68"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                Padding="16,0,18,0" CornerRadius="{StaticResource Radius.ExportNotice}"
+                Background="{DynamicResource Brush.SettingsCard}" BorderBrush="{DynamicResource Brush.OwnedWindowBorder}">
+                <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto"
+                    ColumnSpacing="{StaticResource Space.Sm}" RowSpacing="{StaticResource Space.Xs}">
+                    <controls:ContinuousBorder Grid.RowSpan="2" Width="30" Height="30" VerticalAlignment="Center"
+                        CornerRadius="{StaticResource Radius.SettingsCard}" Background="{DynamicResource Brush.StatusSurface}">
+                        <!-- 三个符号都常驻测量，只用透明度交替：隐藏会退出测量，图标格就会跟着抖。 -->
+                        <Panel>
+                            <Path x:Name="NoticeIconDots" Data="M3 7H4M7 7H8M11 7H12" Stretch="None" Opacity="0"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Stroke="{DynamicResource Brush.StatusText}" StrokeThickness="2" StrokeLineCap="Round"/>
+                            <Path x:Name="NoticeIconCheck" Data="M2 8L6 12L14 4" Width="14" Height="14" Stretch="Uniform" Opacity="0"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Stroke="{DynamicResource Brush.StatusText}" StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"/>
+                            <Path x:Name="NoticeIconCross" Data="M2 2L12 12M12 2L2 12" Stretch="None" Opacity="0"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Stroke="{DynamicResource Brush.StatusText}" StrokeThickness="1.8" StrokeLineCap="Round"/>
+                        </Panel>
+                    </controls:ContinuousBorder>
+                    <TextBlock x:Name="NoticeTitle" Grid.Column="1" Classes="setting-label" FontWeight="SemiBold"
+                        VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                        AutomationProperties.LiveSetting="Polite"/>
+                    <Panel Grid.Column="2" VerticalAlignment="Center">
+                        <StackPanel x:Name="NoticeOpenGroup" Orientation="Horizontal" Spacing="6" Opacity="0">
+                            <TextBlock x:Name="NoticeAction" Classes="settings-caption" FontWeight="SemiBold"
+                                Foreground="{DynamicResource Brush.StatusText}" VerticalAlignment="Center"/>
+                            <Path Data="M1 1L5 5L1 9" Width="5" Height="10" Stretch="Uniform" VerticalAlignment="Center"
+                                Stroke="{DynamicResource Brush.StatusText}" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"/>
+                        </StackPanel>
+                        <TextBlock x:Name="NoticeCount" Classes="settings-caption" FontWeight="SemiBold" Opacity="0"
+                            Foreground="{DynamicResource Brush.StatusText}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Panel>
+                    <TextBlock x:Name="NoticePath" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                        Classes="settings-caption" Foreground="{DynamicResource Brush.TextSecondary}"
+                        TextWrapping="NoWrap" TextTrimming="PathSegmentEllipsis"/>
+                </Grid>
+            </Button>
+            <ProgressBar x:Name="NoticeProgress" Opacity="0" Minimum="0" Maximum="1" IsHitTestVisible="False"
+                HorizontalAlignment="Stretch" VerticalAlignment="Bottom"/>
+        </Panel>
     </controls:ContinuousBorder>
 </Window>

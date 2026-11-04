@@ -1,10 +1,12 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Microsoft.Win32.SafeHandles;
 using PsExporter.Services;
 using PsExporter.ViewModels;
 
@@ -14,7 +16,12 @@ public partial class MainWindow
 {
     private const uint SummonHotkeyMessage = 0x0312; // WM_HOTKEY
     private const int SummonHotkeyId = 0x51E7;
+    private const uint ForegroundWindowEvent = 0x0003; // EVENT_SYSTEM_FOREGROUND
     private bool _summonHotkeyAttached;
+    private IntPtr _summonHotkeyWindow;
+    private bool _summonHotkeyRegistered;
+    private IntPtr _summonForegroundHook;
+    private ForegroundWinEventProc? _summonForegroundCallback;
     private bool _dockRevealedByHotkey;
     private PixelPoint? _pointerDockPosition;
     private bool _resummonPointerAfterMotion;
@@ -28,6 +35,27 @@ public partial class MainWindow
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+    private delegate void ForegroundWinEventProc(IntPtr hook, uint eventType, IntPtr window,
+        int objectId, int childId, uint threadId, uint eventTime);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module,
+        ForegroundWinEventProc callback, uint processId, uint threadId, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWinEvent(IntPtr hook);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    [DllImport("kernel32.dll")]
+    private static extern SafeProcessHandle OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
+
+    [DllImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, StringBuilder path, ref uint size);
+
     /// <summary>抓取状态只存在设置项视图模型里，窗口读它，不另存一份。</summary>
     private bool IsCapturingSummonHotkey => DataContext is MainViewModel { IsSummonHotkeyCapturing: true };
 
@@ -38,6 +66,7 @@ public partial class MainWindow
             || DataContext is not MainViewModel model) return;
         InstallWndProcSubclass();
         if (!_isSubclassed) return;
+        _summonHotkeyWindow = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         _summonHotkeyAttached = true;
         model.SummonHotkeyRegistrationRequested += OnSummonHotkeyRegistrationRequested;
         Deactivated += OnSummonHotkeyWindowDeactivated;
@@ -46,12 +75,15 @@ public partial class MainWindow
 
     private void DetachSummonHotkey()
     {
+        FinishSummonProgramPick(restoreWindow: false);
         if (!_summonHotkeyAttached) return;
         _summonHotkeyAttached = false;
         if (DataContext is MainViewModel model)
             model.SummonHotkeyRegistrationRequested -= OnSummonHotkeyRegistrationRequested;
         Deactivated -= OnSummonHotkeyWindowDeactivated;
+        StopWatchingSummonForeground();
         UnregisterSummonHotkey();
+        _summonHotkeyWindow = IntPtr.Zero;
     }
 
     private void OnSummonHotkeyRegistrationRequested() => ApplySummonHotkeyRegistration();
@@ -60,23 +92,40 @@ public partial class MainWindow
 
     private void UnregisterSummonHotkey()
     {
-        var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (hwnd != IntPtr.Zero) UnregisterHotKey(hwnd, SummonHotkeyId);
+        if (!_summonHotkeyRegistered) return;
+        _summonHotkeyRegistered = false;
+        UnregisterHotKey(_summonHotkeyWindow, SummonHotkeyId);
     }
 
     private void ApplySummonHotkeyRegistration()
     {
         UnregisterSummonHotkey();
-        if (IsCapturingSummonHotkey) return;
-        if (DataContext is not MainViewModel model) return;
-        var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (hwnd == IntPtr.Zero) return;
-        // 空组合键 = 关闭：TryParse 失败就走上面的注销，不再注册。
-        if (!SummonHotkey.TryParse(model.SummonHotkey, out var key, out var modifiers)
+        RefreshSummonHotkeyRegistration();
+    }
+
+    private void RefreshSummonHotkeyRegistration()
+    {
+        if (!_summonHotkeyAttached || _summonHotkeyWindow == IntPtr.Zero || IsCapturingSummonHotkey || _isPickingSummonProgram
+            || DataContext is not MainViewModel model
+            || !SummonHotkey.TryParse(model.SummonHotkey, out var key, out var modifiers)
             || !SummonHotkey.TryGetVirtualKey(key, out var virtualKey))
-            return;
-        if (RegisterHotKey(hwnd, SummonHotkeyId, SummonHotkey.NativeModifiers(modifiers), virtualKey))
         {
+            StopWatchingSummonForeground();
+            UnregisterSummonHotkey();
+            return;
+        }
+
+        if (model.SummonHotkeyProgram.Length == 0)
+            StopWatchingSummonForeground();
+        else if (!WatchSummonForeground(model) || !IsSummonProgramForeground(model))
+        {
+            UnregisterSummonHotkey();
+            return;
+        }
+        if (_summonHotkeyRegistered) return;
+        if (RegisterHotKey(_summonHotkeyWindow, SummonHotkeyId, SummonHotkey.NativeModifiers(modifiers), virtualKey))
+        {
+            _summonHotkeyRegistered = true;
             model.LogDockAnimation($"[hotkey] registered key={model.SummonHotkey}");
             return;
         }
@@ -89,6 +138,53 @@ public partial class MainWindow
             : $"唤起热键 {model.SummonHotkey} 注册失败（Win32 {error}）");
     }
 
+    private bool WatchSummonForeground(MainViewModel model)
+    {
+        if (_summonForegroundHook != IntPtr.Zero) return true;
+        // OUTOFCONTEXT：在现有 UI 消息循环接收前台变化，不拦截键盘或鼠标。
+        _summonForegroundCallback ??= OnSummonForegroundChanged;
+        _summonForegroundHook = SetWinEventHook(ForegroundWindowEvent, ForegroundWindowEvent,
+            IntPtr.Zero, _summonForegroundCallback, 0, 0, 0);
+        if (_summonForegroundHook != IntPtr.Zero) return true;
+        model.AppendLog("Error", "无法监测前台程序，绑定的唤起热键未注册");
+        ReportSummonHotkeyStatus(model, "无法监测前台程序，绑定的唤起热键未启用");
+        return false;
+    }
+
+    private void OnSummonForegroundChanged(IntPtr hook, uint eventType, IntPtr window,
+        int objectId, int childId, uint threadId, uint eventTime)
+    {
+        if (hook == _summonForegroundHook) RefreshSummonHotkeyRegistration();
+    }
+
+    private void StopWatchingSummonForeground()
+    {
+        if (_summonForegroundHook == IntPtr.Zero) return;
+        var hook = _summonForegroundHook;
+        _summonForegroundHook = IntPtr.Zero;
+        UnhookWinEvent(hook);
+    }
+
+    private static bool IsSummonProgramForeground(MainViewModel model)
+        => model.SummonHotkeyProgram.Length == 0
+            || SummonHotkey.MatchesProgram(model.SummonHotkeyProgram, GetWindowExecutable(GetForegroundWindow()));
+
+    private static string? GetWindowExecutable(IntPtr window, bool excludeThisProcess = false)
+    {
+        if (window == IntPtr.Zero || GetWindowThreadProcessId(window, out var processId) == 0) return null;
+        if (excludeThisProcess && processId == (uint)Environment.ProcessId) return null;
+        const uint queryLimitedInformation = 0x1000;
+        using var process = OpenProcess(queryLimitedInformation, false, processId);
+        if (process.IsInvalid) return null;
+        var path = new StringBuilder(512);
+        uint length = (uint)path.Capacity;
+        if (QueryFullProcessImageName(process, 0, path, ref length)) return path.ToString();
+        if (Marshal.GetLastPInvokeError() != 122) return null; // ERROR_INSUFFICIENT_BUFFER
+        length = 32768;
+        path.EnsureCapacity((int)length);
+        return QueryFullProcessImageName(process, 0, path, ref length) ? path.ToString() : null;
+    }
+
     private void OnSummonHotkeyClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel model) return;
@@ -97,8 +193,8 @@ public partial class MainWindow
             StopSummonHotkeyCapture();
             return;
         }
-        UnregisterSummonHotkey();
         model.IsSummonHotkeyCapturing = true;
+        ApplySummonHotkeyRegistration();
         if (sender is Button button) button.Focus();
     }
 
@@ -131,9 +227,10 @@ public partial class MainWindow
         if (SummonHotkey.TryFormat(args.Key, args.KeyModifiers, out var text))
         {
             model.SummonHotkey = text;
-            // 单用功能键会把这个键从其他程序手里拿走，选它的当场说一次。
             if (args.KeyModifiers == KeyModifiers.None)
-                ReportSummonHotkeyStatus(model, $"{text} 已单独作为唤起键，其他程序里的 {text} 交给 PSexp");
+                ReportSummonHotkeyStatus(model, model.SummonHotkeyProgram.Length == 0
+                    ? $"{text} 已设为全局唤起键，会占用其他程序里的 {text}"
+                    : $"{text} 仅在 {model.SummonHotkeyProgramDisplay} 位于前台时用作唤起键");
             StopSummonHotkeyCapture();
             return;
         }
@@ -144,8 +241,10 @@ public partial class MainWindow
 
     private void OnSummonHotkeyMessage() => Dispatcher.UIThread.Post(() =>
     {
-        _animationViewModel?.LogDockAnimation(
-            $"[hotkey] received key={_animationViewModel.SummonHotkey} docked={_isDocked} animating={_isSnapAnimating}");
+        if (!_summonHotkeyRegistered || IsCapturingSummonHotkey || DataContext is not MainViewModel model
+            || !IsSummonProgramForeground(model)) return;
+        model.LogDockAnimation(
+            $"[hotkey] received key={model.SummonHotkey} docked={_isDocked} animating={_isSnapAnimating}");
         SummonFromHotkey();
     });
 

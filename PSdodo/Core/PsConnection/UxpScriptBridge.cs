@@ -6,7 +6,6 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using PsExporter.Services;
 
 namespace PsExporter.Core.PsConnection;
 
@@ -20,7 +19,6 @@ public sealed class UxpScriptBridge
 {
     private const int DispatchDelayMs = 500;
     private const int CleanupDelayMs = 2_000;
-    private sealed record DispatchFocus(IntPtr Window, uint InputTick);
 
     /// <summary>
     /// 执行 UXP 脚本：写入临时 .psjs 文件（UTF8 BOM），用文件关联打开。
@@ -37,20 +35,19 @@ public sealed class UxpScriptBridge
         await File.WriteAllTextAsync(tempFile, scriptContent, utf8WithBom, ct);
 
         var dispatched = false;
-        DispatchFocus? focus = null;
+        // Photoshop 读取 .psjs 时会自己抢到前台；租约记下派发前的前台与输入时钟，之后按需拿回来。
+        using var focus = ScriptFocusGuard.Begin("uxp-dispatch");
         try
         {
             ct.ThrowIfCancellationRequested();
-            focus = OperatingSystem.IsWindows() ? CaptureDispatchFocus() : null;
             if (OperatingSystem.IsWindows())
                 await StaHelper.RunAsync(() => DispatchWithoutActivation(tempFile), ct);
             else
                 using (System.Diagnostics.Process.Start(new ProcessStartInfo(tempFile) { UseShellExecute = true })) { }
             dispatched = true;
 
-            // Photoshop 接收脚本的短窗口内只检查一次焦点。
+            // Photoshop 接收脚本的短窗口内只检查一次焦点；租约结束时再确认一次。
             await Task.Delay(DispatchDelayMs, ct);
-            if (focus is not null) RestoreDispatchFocus(focus);
 
             return new UxpResult
             {
@@ -96,49 +93,6 @@ public sealed class UxpScriptBridge
         return true;
     }
 
-    private static DispatchFocus? CaptureDispatchFocus()
-    {
-        var window = GetForegroundWindow();
-        if (window == IntPtr.Zero) return default;
-        _ = GetWindowThreadProcessId(window, out var processId);
-        var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
-        return processId == (uint)Environment.ProcessId && GetLastInputInfo(ref input)
-            ? new DispatchFocus(window, input.Tick) : null;
-    }
-
-    private static void RestoreDispatchFocus(DispatchFocus before)
-    {
-        var foreground = FindPhotoshopFocusHandoff(before);
-        const uint owner = 4; // GW_OWNER：保留 Photoshop 自己打开的提示框。
-        if (foreground == IntPtr.Zero || GetWindow(foreground, owner) != IntPtr.Zero) return;
-
-        _ = GetWindowThreadProcessId(before.Window, out var processId);
-        if (processId == (uint)Environment.ProcessId && GetForegroundWindow() == foreground
-            && !WindowTaskSwitcher.IsToolWindow(before.Window))
-            _ = SetForegroundWindow(before.Window);
-    }
-
-    private static IntPtr FindPhotoshopFocusHandoff(DispatchFocus before)
-    {
-        var foreground = GetForegroundWindow();
-        if (foreground == IntPtr.Zero || foreground == before.Window) return IntPtr.Zero;
-        var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
-        if (!GetLastInputInfo(ref input) || input.Tick != before.InputTick) return IntPtr.Zero;
-
-        _ = GetWindowThreadProcessId(foreground, out var processId);
-        if (processId == 0 || processId == (uint)Environment.ProcessId) return IntPtr.Zero;
-        try
-        {
-            using var process = System.Diagnostics.Process.GetProcessById((int)processId);
-            return process.ProcessName.Equals("Photoshop", StringComparison.OrdinalIgnoreCase) &&
-                GetForegroundWindow() == foreground ? foreground : IntPtr.Zero;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
-        {
-            return IntPtr.Zero;
-        }
-    }
-
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct ShellExecuteInfo
     {
@@ -159,33 +113,9 @@ public sealed class UxpScriptBridge
         public IntPtr Process;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct LastInputInfo
-    {
-        public uint Size;
-        public uint Tick;
-    }
-
     [DllImport("shell32.dll", EntryPoint = "ShellExecuteExW", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ShellExecuteEx(ref ShellExecuteInfo request);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetWindow(IntPtr window, uint command);
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetLastInputInfo(ref LastInputInfo input);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetForegroundWindow(IntPtr window);
 
     /// <summary>清理临时 .psjs 文件</summary>
     public async Task CleanupTempFileAsync(string tempFilePath)

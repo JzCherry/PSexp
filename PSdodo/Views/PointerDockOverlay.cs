@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -8,38 +7,15 @@ using SkiaSharp;
 
 namespace PsExporter.Views;
 
-/// <summary>Windows per-pixel layered window, independent of Avalonia's DirectComposition surface.</summary>
 internal sealed class PointerDockOverlay : IDisposable
 {
-    private readonly IntPtr _window;
-    private readonly IntPtr _dc;
-    private IntPtr _dib, _originalBitmap, _pixels;
-    private int _width, _height;
-    private bool _visible;
+    private readonly LayeredDesktopOverlay _overlay = new();
     private GenieTexture? _texture;
     private SKPoint[]? _textureCoordinates;
     private int _textureWidth, _textureHeight;
     private GenieFrameTiming _timing = new();
 
     internal string FrameTimingSummary => _timing.Summary;
-
-    internal PointerDockOverlay()
-    {
-        const uint layered = 0x80000, transparent = 0x20, noActivate = 0x08000000, toolWindow = 0x80, topmost = 0x8;
-        const uint extendedStyle = layered | transparent | noActivate | toolWindow | topmost;
-        _window = CreateWindowEx(extendedStyle, "STATIC", null, 0x80000000, 0, 0, 1, 1,
-            IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-        if (_window == IntPtr.Zero) throw new Win32Exception();
-        var disabled = 1;
-        _ = DwmSetWindowAttribute(_window, 3, ref disabled, sizeof(int)); // DWMWA_TRANSITIONS_FORCEDISABLED
-        _dc = CreateCompatibleDC(IntPtr.Zero);
-        if (_dc == IntPtr.Zero)
-        {
-            var error = new Win32Exception();
-            DestroyWindow(_window);
-            throw error;
-        }
-    }
 
     internal void Prepare(SKBitmap bitmap)
     {
@@ -57,7 +33,7 @@ internal sealed class PointerDockOverlay : IDisposable
         var alpha = (byte)Math.Round(opacity * 255);
         if (alpha == 0)
         {
-            Hide();
+            _overlay.Hide();
             return false;
         }
 
@@ -74,12 +50,10 @@ internal sealed class PointerDockOverlay : IDisposable
         var top = (int)Math.Floor(minY * scale) - 1;
         var width = (int)Math.Ceiling(maxX * scale) - left + 1;
         var height = (int)Math.Ceiling(maxY * scale) - top + 1;
-        EnsureBuffer(width, height);
 
         _textureCoordinates ??= Array.ConvertAll(mesh.TexCoords, point => new SKPoint(
             point.X * _textureWidth / mesh.SourceWidth, point.Y * _textureHeight / mesh.SourceHeight));
-        using var surface = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul),
-            _pixels, _width * 4) ?? throw new InvalidOperationException("Cannot create dock animation surface.");
+        using var surface = _overlay.CreateSurface(width, height);
         var canvas = surface.Canvas;
         canvas.Clear(SKColors.Transparent);
         canvas.Translate(-left, -top);
@@ -89,17 +63,7 @@ internal sealed class PointerDockOverlay : IDisposable
         canvas.DrawVertices(SKVertexMode.Triangles, mesh.Vertices, _textureCoordinates, null, mesh.Indices, paint);
         surface.Flush();
 
-        var destination = new Pair(origin.X + left, origin.Y + top);
-        var size = new Pair(width, height);
-        var source = new Pair(0, 0);
-        var blend = new Blend { Alpha = 255, Format = 1 };
-        if (!UpdateLayeredWindow(_window, IntPtr.Zero, ref destination, ref size, _dc, ref source, 0, ref blend, 2))
-            throw new Win32Exception();
-        if (!_visible)
-        {
-            ShowWindow(_window, 4); // SW_SHOWNOACTIVATE. The first pixels are already installed.
-            _visible = true;
-        }
+        _overlay.Present(new PixelRect(origin.X + left, origin.Y + top, width, height));
         _timing.Drawn();
         return true;
     }
@@ -120,38 +84,9 @@ internal sealed class PointerDockOverlay : IDisposable
             await Task.Delay(8).ConfigureAwait(false);
     }
 
-    private void EnsureBuffer(int width, int height)
-    {
-        if (width <= _width && height <= _height) return;
-        // Grow in chunks so the expanding mesh does not allocate a bitmap every frame.
-        width = Math.Max(_width, (width + 63) / 64 * 64);
-        height = Math.Max(_height, (height + 63) / 64 * 64);
-        var header = new BitmapHeader { Size = 40, Width = width, Height = -height, Planes = 1, Bits = 32 };
-        var bitmap = CreateDIBSection(_dc, ref header, 0, out var pixels, IntPtr.Zero, 0);
-        if (bitmap == IntPtr.Zero) throw new Win32Exception();
-        var previous = SelectObject(_dc, bitmap);
-        if (previous == IntPtr.Zero)
-        {
-            DeleteObject(bitmap);
-            throw new InvalidOperationException("Cannot select dock animation bitmap.");
-        }
-        if (_dib == IntPtr.Zero) _originalBitmap = previous;
-        else DeleteObject(_dib);
-        _dib = bitmap;
-        _pixels = pixels;
-        _width = width;
-        _height = height;
-    }
-
-    private void Hide()
-    {
-        if (_visible) ShowWindow(_window, 0);
-        _visible = false;
-    }
-
     internal void Clear()
     {
-        Hide();
+        _overlay.Hide();
         _texture?.Dispose();
         _texture = null;
         _textureCoordinates = null;
@@ -160,41 +95,8 @@ internal sealed class PointerDockOverlay : IDisposable
     public void Dispose()
     {
         Clear();
-        if (_dib != IntPtr.Zero)
-        {
-            SelectObject(_dc, _originalBitmap);
-            DeleteObject(_dib);
-        }
-        DeleteDC(_dc);
-        DestroyWindow(_window);
+        _overlay.Dispose();
     }
 
-    [StructLayout(LayoutKind.Sequential)] private record struct Pair(int X, int Y);
-    [StructLayout(LayoutKind.Sequential)] private struct Blend { internal byte Op, Flags, Alpha, Format; }
-    [StructLayout(LayoutKind.Sequential)] private struct BitmapHeader
-    {
-        internal uint Size;
-        internal int Width, Height;
-        internal ushort Planes, Bits;
-        internal uint Compression, ImageSize;
-        internal int XResolution, YResolution;
-        internal uint ColorsUsed, ImportantColors;
-    }
-
-    [DllImport("user32.dll", EntryPoint = "CreateWindowExW", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr CreateWindowEx(uint exStyle, string className, string? title, uint style, int x, int y,
-        int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
-    [DllImport("user32.dll", EntryPoint = "UpdateLayeredWindow", SetLastError = true)]
-    private static extern bool UpdateLayeredWindow(IntPtr window, IntPtr destinationDc, ref Pair destination, ref Pair size,
-        IntPtr sourceDc, ref Pair source, uint colorKey, ref Blend blend, uint flags);
-    [DllImport("user32.dll", EntryPoint = "ShowWindow")] private static extern bool ShowWindow(IntPtr window, int command);
-    [DllImport("user32.dll", EntryPoint = "DestroyWindow")] private static extern bool DestroyWindow(IntPtr window);
     [DllImport("dwmapi.dll")] private static extern int DwmFlush();
-    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window, uint attribute, ref int value, int size);
-    [DllImport("gdi32.dll", EntryPoint = "CreateCompatibleDC", SetLastError = true)] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
-    [DllImport("gdi32.dll", EntryPoint = "DeleteDC")] private static extern bool DeleteDC(IntPtr dc);
-    [DllImport("gdi32.dll", EntryPoint = "CreateDIBSection", SetLastError = true)]
-    private static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapHeader header, uint usage, out IntPtr pixels, IntPtr section, uint offset);
-    [DllImport("gdi32.dll", EntryPoint = "SelectObject")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
-    [DllImport("gdi32.dll", EntryPoint = "DeleteObject")] private static extern bool DeleteObject(IntPtr obj);
 }

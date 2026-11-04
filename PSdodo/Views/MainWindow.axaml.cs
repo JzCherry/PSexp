@@ -111,6 +111,7 @@ public partial class MainWindow : Window
             OnSummonHotkeyMessage();
             return IntPtr.Zero;
         }
+        if (msg == RawInputMessage && _isPickingSummonProgram) ObserveSummonProgramPickInput(lParam);
         if (msg == 0x0112 && (wParam.ToInt64() & 0xFFF0) == 0xF020
             && TryQueueDockRetraction("native-system-minimize")) return IntPtr.Zero;
         if (msg == WM_ENTERSIZEMOVE)
@@ -272,7 +273,9 @@ public partial class MainWindow : Window
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
             _animationViewModel.SettingsNavigationRequested -= OnSettingsNavigationRequested;
+            _animationViewModel.ExportStarted -= OnExportStarted;
             _animationViewModel.ExportCompleted -= OnExportCompleted;
+            _animationViewModel.ExportEndedWithoutResult -= OnExportEndedWithoutResult;
         }
         _exportNotice?.Close();
         _animationViewModel = viewModel;
@@ -282,7 +285,9 @@ public partial class MainWindow : Window
             _animationViewModel.PropertyChanged += OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable += OnPhotoshopDocumentChanged;
             _animationViewModel.SettingsNavigationRequested += OnSettingsNavigationRequested;
+            _animationViewModel.ExportStarted += OnExportStarted;
             _animationViewModel.ExportCompleted += OnExportCompleted;
+            _animationViewModel.ExportEndedWithoutResult += OnExportEndedWithoutResult;
         }
         UpdateStatusAnimationState(restartActiveClocks: true);
     }
@@ -293,6 +298,8 @@ public partial class MainWindow : Window
             ApplyExportHighlight();
         if (e.PropertyName == nameof(MainViewModel.ShowExportNotice) && _animationViewModel?.ShowExportNotice == false)
             _exportNotice?.Close();
+        if (e.PropertyName == nameof(MainViewModel.ExportedCount))
+            OnExportProgressChanged();
         if (e.PropertyName is nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRefreshingStatus)
             && _animationViewModel?.HasPendingDocumentChanges == true)
             QueueForegroundDocumentProbe();
@@ -474,7 +481,9 @@ public partial class MainWindow : Window
             _animationViewModel.PropertyChanged -= OnAnimationViewModelPropertyChanged;
             _animationViewModel.DocumentChangeAvailable -= OnPhotoshopDocumentChanged;
             _animationViewModel.SettingsNavigationRequested -= OnSettingsNavigationRequested;
+            _animationViewModel.ExportStarted -= OnExportStarted;
             _animationViewModel.ExportCompleted -= OnExportCompleted;
+            _animationViewModel.ExportEndedWithoutResult -= OnExportEndedWithoutResult;
             _ = _animationViewModel.StopDocumentEventsAsync();
         }
         DataContextChanged -= OnAnimationDataContextChanged;
@@ -981,6 +990,7 @@ public partial class MainWindow : Window
     {
         PersistWindowPlacement();
         _isHiddenToTray = true;
+        FinishSummonProgramPick(restoreWindow: false);
         EndInputEditing();
         _exportCommandWindow?.Close();
         Hide();

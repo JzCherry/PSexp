@@ -80,6 +80,7 @@ try
             StartAlwaysOnTop = true,
             AutoRefreshOnActivated = false,
             SummonHotkey = "Ctrl+Alt+Shift+F12",
+            SummonHotkeyProgram = Path.Combine(tempRoot, "Example.exe"),
             SummonAtPointer = true,
             SummonPointerMode = PointerSummonMode.Center,
             SummonReturnAnimation = true,
@@ -103,6 +104,7 @@ try
         Equal(expected.StartAlwaysOnTop, loaded.StartAlwaysOnTop);
         Equal(expected.AutoRefreshOnActivated, loaded.AutoRefreshOnActivated);
         Equal(expected.SummonHotkey, loaded.SummonHotkey);
+        Equal(expected.SummonHotkeyProgram, loaded.SummonHotkeyProgram);
         Equal(expected.SummonAtPointer, loaded.SummonAtPointer);
         Equal(PointerSummonMode.Center, loaded.SummonPointerMode);
         Equal(true, loaded.SummonReturnAnimation);
@@ -114,11 +116,13 @@ try
         {
             DefaultExportPath = expected.DefaultExportPath,
             SummonHotkey = "",
+            SummonHotkeyProgram = "",
             SummonAtPointer = false
         };
         True(service.Save(cleared));
         var reloaded = new SettingsService(settingsPath).Load();
         Equal("", reloaded.SummonHotkey);
+        Equal("", reloaded.SummonHotkeyProgram);
         Equal(false, reloaded.SummonAtPointer);
         Equal(PointerSummonMode.Off, reloaded.SummonPointerMode);
         Equal(false, reloaded.SummonReturnAnimation);
@@ -126,6 +130,7 @@ try
 
         File.WriteAllText(settingsPath, """{"summonAtPointer":true}""");
         Equal(PointerSummonMode.Automatic, service.Load().SummonPointerMode);
+        Equal(AppSettings.DefaultSummonHotkeyProgram, service.Current.SummonHotkeyProgram);
         File.WriteAllText(settingsPath, """{"summonPointerMode":0,"summonAtPointer":true}""");
         Equal(PointerSummonMode.Off, service.Load().SummonPointerMode);
     });
@@ -1140,6 +1145,17 @@ try
         Equal(0xFu, SummonHotkey.NativeModifiers(KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Meta));
     });
 
+    Run("Summon hotkey matches the bound executable and supports an empty global binding", () =>
+    {
+        var program = Path.Combine(tempRoot, "Example.exe");
+        True(SummonHotkey.MatchesProgram("", null));
+        True(SummonHotkey.MatchesProgram(AppSettings.DefaultSummonHotkeyProgram, Path.Combine(tempRoot, "PHOTOSHOP.EXE")));
+        True(!SummonHotkey.MatchesProgram(AppSettings.DefaultSummonHotkeyProgram, Path.Combine(tempRoot, "Photoshop Helper.exe")));
+        True(SummonHotkey.MatchesProgram(program, program.ToUpperInvariant()));
+        True(!SummonHotkey.MatchesProgram(program, Path.Combine(tempRoot, "other", "Example.exe")));
+        True(!SummonHotkey.MatchesProgram(program, null));
+    });
+
     Run("Summon placement supports beside and centered positions within the working area", () =>
     {
         var area = new PixelRect(0, 0, 1920, 1080);
@@ -1174,6 +1190,45 @@ try
             True(area.Contains(rect.TopLeft) && area.Contains(new PixelPoint(rect.Right - 1, rect.Bottom - 1)),
                 $"{cursor} 唤起的窗口越界：{rect}");
         }
+    });
+
+    Run("Script focus reclaim only answers Photoshop steals during a script", () =>
+    {
+        var ours = new IntPtr(0x1000);
+        var photo = new IntPtr(0x2000);
+        const uint tick = 123456;
+        ScriptFocusGuard.Decision Judge(IntPtr foreground, uint currentTick, bool hasOwner,
+            bool isPhotoshop, bool ourWindowIsTool = false) =>
+            ScriptFocusGuard.Decide(ours, foreground, tick, currentTick, hasOwner, isPhotoshop, ourWindowIsTool);
+
+        // 前台还归自己：什么都不做。
+        Equal(ScriptFocusGuard.Decision.StillOurs, Judge(ours, tick, false, false));
+        // 用户点了别的地方（输入时钟走了）：绝不抢。
+        Equal(ScriptFocusGuard.Decision.UserInput, Judge(photo, tick + 1, false, true));
+        // 顺序：用户动手排在其他判断之前，即使前台是 Photoshop 的对话框也不抢。
+        Equal(ScriptFocusGuard.Decision.UserInput, Judge(photo, tick + 1, true, true));
+        // Photoshop 弹出的从属窗口（对话框）：前台留给它，哪怕用户没动手。
+        Equal(ScriptFocusGuard.Decision.OwnedDialog, Judge(photo, tick, true, true));
+        // 抢前台的不是 Photoshop：不插手别人的程序。
+        Equal(ScriptFocusGuard.Decision.NotPhotoshop, Judge(new IntPtr(0x3000), tick, false, false));
+        // 自己此刻是工具窗口（收纳态）：不抢。
+        Equal(ScriptFocusGuard.Decision.ToolWindow, Judge(photo, tick, false, true, ourWindowIsTool: true));
+        // 只有"用户没动手、抢前台的是 Photoshop 本体、自己不是工具窗口"这一种组合才拿回来。
+        Equal(ScriptFocusGuard.Decision.Reclaim, Judge(photo, tick, false, true));
+        // 没有快照（脚本开始时前台本来就不在 PSexp）/当前没有前台：都不动作。
+        Equal(ScriptFocusGuard.Decision.NoSnapshot, ScriptFocusGuard.Decide(IntPtr.Zero, photo, tick, tick, false, true, false));
+        Equal(ScriptFocusGuard.Decision.NoForeground, ScriptFocusGuard.Decide(ours, IntPtr.Zero, tick, tick, false, true, false));
+    });
+
+    Run("Export notice card words its own progress and ending", () =>
+    {
+        // 有总数才写"已出 / 总数"；总数缺失或为 0 一律退回"几个"，不出现"3 / 0"这种读数。
+        Equal("3 / 12", ExportNoticeWindow.ProgressReadout(3, 12));
+        Equal("12 / 12", ExportNoticeWindow.ProgressReadout(12, 12));
+        Equal("7 个", ExportNoticeWindow.ProgressReadout(7, null));
+        Equal("0 个", ExportNoticeWindow.ProgressReadout(0, 0));
+        Equal("导出未完成", ExportNoticeWindow.EndedTitle(false));
+        Equal("已停止", ExportNoticeWindow.EndedTitle(true));
     });
 }
 finally

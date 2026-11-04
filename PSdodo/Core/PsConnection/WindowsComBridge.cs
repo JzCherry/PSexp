@@ -34,6 +34,8 @@ public sealed class WindowsComBridge : IPsBridge
         var wrapped = WrapScript(script, logFilePath);
         dynamic? ps = null;
         var connectionLogs = new List<PsLogEntry>();
+        // DoJavaScript 期间 Photoshop 可能自己抢到前台，让主窗白丢激活；用户没操作就拿回来。
+        using var focus = ScriptFocusGuard.Begin("com-script");
         try
         {
             ps = RunningPhotoshopConnection.Attach(out var connection);

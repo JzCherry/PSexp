@@ -1004,15 +1004,80 @@
                                                     </controls:SegmentPanel>
                                                 </controls:AnimatedSegmentTrack>
                                             </Grid>
-                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDelayHotkeyLine}"/>
-                                            <Grid Classes="settings-row" IsVisible="{Binding ShowHotkeySetting}" ColumnDefinitions="*,148" ColumnSpacing="12">
-                                                <TextBlock Text="唤起热键" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="不在前台时也能用组合键唤回主窗口。字母、数字、小键盘数字要搭配修饰键；F1–F12 可以单用，但该键在其他程序里会交给 PSexp。"/>
+                                        <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDelayStartupLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowStartupSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="开机静默启动" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="登录 Windows 后在托盘运行。可用托盘图标或热键打开主窗口。"/>
+                                                <Panel Grid.Column="1">
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding SilentStartupEnabled}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetSilentStartupCommand}" CommandParameter="False" AutomationProperties.Name="开机静默启动：关闭">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding SilentStartupEnabled, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SetSilentStartupCommand}" CommandParameter="True" AutomationProperties.Name="开机静默启动：开启">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding SilentStartupEnabled, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </Panel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </controls:ContinuousBorder>
+                                </StackPanel>
+                                <StackPanel Spacing="{StaticResource Space.Sm}" IsVisible="{Binding ShowSummonCard}">
+                                    <TextBlock Classes="settings-group-label" Text="唤起"/>
+                                    <controls:ContinuousBorder Classes="settings-section">
+                                        <StackPanel>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowHotkeySetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <TextBlock Text="唤起热键" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="在绑定的程序中按热键唤回主窗口。未绑定时全局生效。字母和数字需搭配修饰键，F1–F12 可以单用。"/>
                                                 <Button Grid.Column="1" Classes="secondary settings-directory-action" Content="{Binding SummonHotkeyDisplay}"
-                                                    MinWidth="0" Padding="1,0" FontSize="{StaticResource FontSize.Caption}"
+                                                    MinWidth="0" Padding="{StaticResource Padding.Secondary}" FontSize="{StaticResource FontSize.Caption}"
                                                     Click="OnSummonHotkeyClick" LostFocus="OnSummonHotkeyLostFocus" ToolTip.Tip="点击后按下新组合键；退格清空即关闭；Esc 或再次点击取消。"
                                                     AutomationProperties.Name="唤起热键组合键"/>
                                             </Grid>
-                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowHotkeyPointerLine}"/>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowHotkeyProgramLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowHotkeyProgramSetting}" ColumnDefinitions="*,176" ColumnSpacing="12">
+                                                <TextBlock Text="快捷键绑定程序" Classes="setting-label" VerticalAlignment="Center"
+                                                           ToolTip.Tip="仅在绑定程序位于前台时启用唤起热键。清空绑定后，热键全局生效。"/>
+                                                <Grid Grid.Column="1" ColumnDefinitions="*,32,32" ColumnSpacing="4" VerticalAlignment="Center">
+                                                    <Grid.Styles>
+                                                        <Style Selector="Button.secondary">
+                                                            <Setter Property="MinWidth" Value="0"/>
+                                                            <Setter Property="Padding" Value="0"/>
+                                                            <Setter Property="Background" Value="{DynamicResource Brush.SettingsTrack}"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource Brush.SettingsBorder}"/>
+                                                        </Style>
+                                                    </Grid.Styles>
+                                                    <controls:ContinuousBorder Height="{StaticResource Control.StandardHeight}" Padding="6,0"
+                                                            Background="{DynamicResource Brush.SettingsTrack}" BorderBrush="{DynamicResource Brush.SettingsBorder}"
+                                                            BorderThickness="1" CornerRadius="{StaticResource Radius.Sm}" ToolTip.Tip="{Binding SummonHotkeyProgramDisplay}">
+                                                        <TextBlock Text="{Binding SummonHotkeyProgramDisplay}" TextTrimming="CharacterEllipsis"
+                                                                   FontSize="{StaticResource FontSize.Caption}" TextAlignment="Center" VerticalAlignment="Center"/>
+                                                    </controls:ContinuousBorder>
+                                                    <Button x:Name="PickSummonProgramButton" Grid.Column="1" Classes="secondary" Width="32"
+                                                            Click="OnChooseSummonHotkeyProgramClick" AutomationProperties.Name="选择绑定窗口"
+                                                            ToolTip.Tip="点击带高亮框的目标窗口以绑定，按 Esc 取消">
+                                                        <Canvas Width="16" Height="16">
+                                                            <Path Data="M4 2.5H12Q14.5 2.5 14.5 5V11Q14.5 13.5 12 13.5H4Q1.5 13.5 1.5 11V5Q1.5 2.5 4 2.5Z M1.5 5.5H14.5 M8 7.5V11.5 M6 9.5H10"
+                                                                  Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.4"
+                                                                  StrokeLineCap="Round" StrokeJoin="Round"/>
+                                                        </Canvas>
+                                                    </Button>
+                                                    <Button x:Name="ClearSummonProgramButton" Grid.Column="2" Classes="secondary" Width="32"
+                                                            IsEnabled="{Binding HasSummonHotkeyProgram}" Command="{Binding ClearSummonHotkeyProgramCommand}"
+                                                            AutomationProperties.Name="清空程序绑定" ToolTip.Tip="清空后全局使用唤起热键">
+                                                        <Canvas Width="16" Height="16">
+                                                            <Path Data="M2.5 2.5L13.5 13.5 M13.5 2.5L2.5 13.5"
+                                                                  Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.4"
+                                                                  StrokeLineCap="Round" StrokeJoin="Round"/>
+                                                        </Canvas>
+                                                    </Button>
+                                                </Grid>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowHotkeyProgramPointerLine}"/>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowPointerSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <TextBlock Text="唤起跟随鼠标" Classes="setting-label" VerticalAlignment="Center"
                                                            ToolTip.Tip="选择唤回主窗口时的位置。"/>
@@ -1049,26 +1114,6 @@
                                                         </Button>
                                                     </controls:SegmentPanel>
                                                 </controls:AnimatedSegmentTrack>
-                                            </Grid>
-                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowPointerStartupLine}"/>
-                                            <Grid Classes="settings-row" IsVisible="{Binding ShowStartupSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="开机静默启动" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="登录 Windows 后在托盘运行。可用托盘图标或热键打开主窗口。"/>
-                                                <Panel Grid.Column="1">
-                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding SilentStartupEnabled}">
-                                                        <controls:SegmentPanel>
-                                                            <Button Classes="seg" Command="{Binding SetSilentStartupCommand}" CommandParameter="False" AutomationProperties.Name="开机静默启动：关闭">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding SilentStartupEnabled, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                            <Button Classes="seg" Command="{Binding SetSilentStartupCommand}" CommandParameter="True" AutomationProperties.Name="开机静默启动：开启">
-                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
-                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding SilentStartupEnabled, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
-                                                                </controls:ContinuousBorder>
-                                                            </Button>
-                                                        </controls:SegmentPanel>
-                                                    </controls:AnimatedSegmentTrack>
-                                                </Panel>
                                             </Grid>
                                         </StackPanel>
                                     </controls:ContinuousBorder>

@@ -1,5 +1,6 @@
 using System.Text;
 using Avalonia.Input;
+using PsExporter.Models;
 
 namespace PsExporter.Services;
 
@@ -30,11 +31,19 @@ public static class SummonHotkey
 
     /// <summary>
     /// 裸键只放行 F1–F12：裸字母/数字/小键盘会在全系统吞掉普通输入，代价不可接受。
-    /// 单用功能键确实会接管该键（如 F5 在其他程序不再刷新），这是选择它的代价，录键时提示一次。
+    /// 单用功能键会在唤起热键生效的范围内接管该键。
     /// </summary>
     public static bool Supports(Key key, KeyModifiers modifiers)
         => TryGetVirtualKey(key, out _)
             && (modifiers != KeyModifiers.None || key is >= Key.F1 and <= Key.F12);
+
+    public static bool MatchesProgram(string binding, string? foregroundExecutable)
+    {
+        if (binding.Length == 0) return true;
+        if (string.Equals(binding, AppSettings.DefaultSummonHotkeyProgram, StringComparison.OrdinalIgnoreCase))
+            foregroundExecutable = Path.GetFileName(foregroundExecutable);
+        return string.Equals(binding, foregroundExecutable, StringComparison.OrdinalIgnoreCase);
+    }
 
     public static uint NativeModifiers(KeyModifiers modifiers)
     {

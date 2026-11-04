@@ -29,7 +29,9 @@ public partial class MainViewModel
     private static bool IsExportNoticeDuration(int seconds) => seconds is 3 or AppSettings.DefaultExportNoticeDurationSeconds or 10;
     [RelayCommand] private void SetExportNoticeTarget(ExportNoticeTarget value) => ExportNoticeTarget = value;
 
+    internal event Action<string, int?>? ExportStarted;
     internal event Action<string, int>? ExportCompleted;
+    internal event Action<bool>? ExportEndedWithoutResult;
 
     [ObservableProperty] private bool _closeToTray = true;
     public string WindowCloseHint => CloseToTray ? "收起到托盘，后台继续运行" : "退出 PSexp";
@@ -67,6 +69,7 @@ public partial class MainViewModel
 
     // ---------- 全局唤起热键 ----------
     [ObservableProperty] private string _summonHotkey = AppSettings.DefaultSummonHotkey;
+    [ObservableProperty] private string _summonHotkeyProgram = AppSettings.DefaultSummonHotkeyProgram;
     [ObservableProperty] private bool _isSummonHotkeyCapturing;
     [ObservableProperty] private PointerSummonMode _summonPointerMode;
     [ObservableProperty] private bool _summonReturnAnimation;
@@ -79,6 +82,8 @@ public partial class MainViewModel
     /// <summary>空组合键就是关闭：不注册任何系统热键，界面上显示「未设置」。</summary>
     public string SummonHotkeyDisplay => IsSummonHotkeyCapturing ? "按键…"
         : SummonHotkey.Length == 0 ? "未设置" : SummonHotkey;
+    public string SummonHotkeyProgramDisplay => SummonHotkeyProgram.Length == 0 ? "未绑定"
+        : Path.GetFileNameWithoutExtension(SummonHotkeyProgram);
 
     partial void OnSummonHotkeyChanged(string value)
     {
@@ -88,6 +93,18 @@ public partial class MainViewModel
     }
 
     partial void OnIsSummonHotkeyCapturingChanged(bool value) => OnPropertyChanged(nameof(SummonHotkeyDisplay));
+
+    partial void OnSummonHotkeyProgramChanged(string value)
+    {
+        OnPropertyChanged(nameof(SummonHotkeyProgramDisplay));
+        OnPropertyChanged(nameof(HasSummonHotkeyProgram));
+        SaveBehaviorSettings();
+        SummonHotkeyRegistrationRequested?.Invoke();
+    }
+
+    public bool HasSummonHotkeyProgram => SummonHotkeyProgram.Length > 0;
+    [RelayCommand] private void ClearSummonHotkeyProgram() => SummonHotkeyProgram = "";
+
 
     partial void OnSummonPointerModeChanged(PointerSummonMode value)
     {

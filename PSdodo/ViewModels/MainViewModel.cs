@@ -87,6 +87,7 @@ public partial class MainViewModel : ViewModelBase
         _exportNoticeTarget = Enum.IsDefined(s.ExportNoticeTarget) ? s.ExportNoticeTarget : ExportNoticeTarget.OutputFolder;
         DockRetractDelayMs = s.DockRetractDelayMs is 250 or 420 or 800 ? s.DockRetractDelayMs : 420;
         _summonHotkey = Services.SummonHotkey.Normalize(s.SummonHotkey, AppSettings.DefaultSummonHotkey);
+        _summonHotkeyProgram = s.SummonHotkeyProgram ?? AppSettings.DefaultSummonHotkeyProgram;
         _summonPointerMode = s.SummonPointerMode;
         _summonReturnAnimation = s.SummonReturnAnimation;
         RefreshSettingsSearch();
@@ -789,6 +790,7 @@ public partial class MainViewModel : ViewModelBase
             ExportNoticeTarget = ExportNoticeTarget,
             DockRetractDelayMs = DockRetractDelayMs,
             SummonHotkey = SummonHotkey,
+            SummonHotkeyProgram = SummonHotkeyProgram,
             SummonAtPointer = FollowsPointerOnSummon,
             SummonPointerMode = SummonPointerMode,
             SummonReturnAnimation = SummonReturnAnimation,
@@ -866,6 +868,9 @@ public partial class MainViewModel : ViewModelBase
         var pendingRefresh = _statusRefreshTask;
         IsPreparingExport = true;
         IsBusy = true;
+        // 焦点租约挂满整个导出：Photoshop 可能在派发之后任意一刻才自己抢到前台，
+        // 只检查一次会漏掉；期间用户没有动手就把前台拿回主窗。
+        using var focus = ScriptFocusGuard.Begin("export");
         ExportStatusText = "正在检查 Photoshop 文档…";
         AppendLog("Debug", $"收到导出请求 mode={mode}，等待文档同步={pendingRefresh is { IsCompleted: false }}");
         RefreshCanExecute();
@@ -990,7 +995,11 @@ public partial class MainViewModel : ViewModelBase
             : $"{title} 开始...";
         RefreshCanExecute();
         AppendLog("Info", $"▶ {title} 开始");
+        ExportStarted?.Invoke(outputDirectory, expectedFileCount);
 
+        // 浮动卡片已经挂出来了，就必须给它一个终局：成功之外的任何收尾都要转成不可点的结束态，
+        // 否则成功但一个文件都没有、或中途异常时，卡片会一直停在“正在导出”。
+        var noticeResolved = false;
         try
         {
             var result = await factory(cancellationToken);
@@ -1012,7 +1021,10 @@ public partial class MainViewModel : ViewModelBase
                 if (saveAndCloseProcessId is { } processId && result.ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
                     await SaveAndCloseExportedDocumentAsync(result.ReturnValue, processId);
                 if (ShowExportNotice && CanOpenExportFolder && ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
+                {
+                    noticeResolved = true;
                     ExportCompleted?.Invoke(_lastSuccessfulExportDirectory, ExportedCount);
+                }
             }
             else
             {
@@ -1034,6 +1046,7 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
+            if (!noticeResolved) ExportEndedWithoutResult?.Invoke(cancellationToken.IsCancellationRequested);
             _isSavingExportDocument = false;
             IsExporting = false;
             IsCancelling = false;

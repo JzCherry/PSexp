@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using PsExporter.Core.PsConnection;
 using PsExporter.Services;
 using PsExporter.ViewModels;
 
@@ -17,11 +18,13 @@ public partial class MainWindow
 
     private void OnWindowDeactivated(object? sender, EventArgs e)
     {
+        // Photoshop 执行派给它的脚本时会自己抢前台，这不是用户的切换动作；能当场拿回来就不算一次真正的失焦。
+        var reclaimed = ScriptFocusGuard.ReclaimActive("deactivated");
         _exportEnterHeld = false;
-        _hasProbedCurrentActivation = false;
+        // 拿回焦点不重置激活代次，否则"拿回来→再探一次文档→再被抢"会来回拉。
+        if (!reclaimed) _hasProbedCurrentActivation = false;
         EndInputEditing();
-        if (_isDocked && _isDockRevealed)
-            TryQueueDockRetraction("deactivated");
+        if (!reclaimed && _isDocked && _isDockRevealed) TryQueueDockRetraction("deactivated");
         if (!_isSnapAnimating && !_dockRetractionQueued && DataContext is MainViewModel model)
             model.FlushParameterMemory();
     }
@@ -33,7 +36,7 @@ public partial class MainWindow
     }
 
     private bool CanRetractDock()
-        => _isDocked && !_isClosing && !_isHiddenToTray && !_isRestoringPlacement
+        => _isDocked && !_isClosing && !_isHiddenToTray && !_isRestoringPlacement && !_isPickingSummonProgram
             && _placementRestorationCompleted && _dockedEdge != DockEdge.None;
 
     // 主窗口自己的请求入口，不安装全局键盘/鼠标钩子。
