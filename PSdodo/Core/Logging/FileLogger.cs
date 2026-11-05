@@ -13,8 +13,7 @@ public sealed class FileLogger
 
     public string LogPath => _logPath;
 
-    public FileLogger() : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PSexp", "Logs", "psx.log"))
+    public FileLogger() : this(Path.Combine(AppProfile.LocalDirectory, "Logs", "psx.log"))
     {
     }
 

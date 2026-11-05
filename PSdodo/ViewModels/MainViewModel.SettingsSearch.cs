@@ -115,6 +115,7 @@ public partial class MainViewModel
 
     public void OpenSettingsPage(bool showUpdates = false)
     {
+        ReadSilentStartup();
         // Search is temporary navigation, not a remembered export setting.
         SettingsSearchQuery = "";
         IsViewSetting = true;

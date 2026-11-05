@@ -29,7 +29,7 @@ public sealed class PhotoshopDocumentEvents : IDisposable
     {
         _photoshop = photoshop;
         _logger = logger;
-        _directory = directory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PSexp", "DocumentEvents");
+        _directory = directory ?? Path.Combine(AppProfile.LocalDirectory, "DocumentEvents");
         _debounce = new Timer(_ => Notify(), null, Timeout.Infinite, Timeout.Infinite);
     }
 

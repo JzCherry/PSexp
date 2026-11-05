@@ -22,10 +22,7 @@ public sealed class SettingsService : ISettingsService
     public string DataDirectory => _directory;
 
     public SettingsService()
-        : this(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "PsExporter",
-            "settings.json"))
+        : this(Path.Combine(AppProfile.SettingsDirectory, "settings.json"))
     {
     }
 
@@ -43,7 +40,7 @@ public sealed class SettingsService : ISettingsService
             if (File.Exists(_filePath))
             {
                 var json = File.ReadAllText(_filePath);
-                Current = JsonSerializer.Deserialize<AppSettings>(json, _opts) ?? new AppSettings();
+                Current = JsonSerializer.Deserialize<AppSettings>(json, _opts) ?? CreateDefaults();
             }
             else
             {
@@ -88,6 +85,7 @@ public sealed class SettingsService : ISettingsService
         try
         {
             Directory.CreateDirectory(_directory);
+            settings.ExtensionData ??= Current.ExtensionData;
             File.WriteAllText(tempPath, JsonSerializer.Serialize(settings, _opts));
             File.Move(tempPath, _filePath, overwrite: true);
             Current = settings;
@@ -113,6 +111,8 @@ public sealed class SettingsService : ISettingsService
     private static AppSettings CreateDefaults() => new()
     {
         DefaultDestination = ExportDestination.DocumentFolder,
-        DefaultExportPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        DefaultExportPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        // A fresh test profile leaves the production shortcut available while both instances run.
+        SummonHotkey = AppProfile.IsTestBuild ? "" : AppSettings.DefaultSummonHotkey
     };
 }

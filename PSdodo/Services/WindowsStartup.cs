@@ -8,11 +8,24 @@ internal static class WindowsStartup
     internal const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     internal const string ValueName = "PSexpV3";
 
-    internal static bool IsEnabled()
+    internal static bool CanConfigure => OperatingSystem.IsWindows() && !AppProfile.IsTestBuild;
+
+    internal static (bool Exists, string? ExecutablePath) ReadRegistration()
     {
-        if (!OperatingSystem.IsWindows()) return false;
+        if (!CanConfigure) return default;
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-        return key?.GetValue(ValueName) is string;
+        var value = key?.GetValue(ValueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        return (value is not null, GetRegisteredExecutable(value as string));
+    }
+
+    internal static string? GetRegisteredExecutable(string? command)
+    {
+        var suffix = $"\" {Argument}";
+        if (command is null || command.Length <= suffix.Length + 1
+            || !command.StartsWith('"') || !command.EndsWith(suffix, StringComparison.Ordinal))
+            return null;
+        var path = command[1..^suffix.Length];
+        return Path.IsPathFullyQualified(path) && File.Exists(path) ? path : null;
     }
 
     internal static string CommandFor(string path) => $"\"{path}\" {Argument}";
@@ -20,6 +33,7 @@ internal static class WindowsStartup
     internal static void SetEnabled(bool enabled)
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+        if (!CanConfigure) throw new InvalidOperationException("测试版不登记开机启动");
         using var key = Registry.CurrentUser.CreateSubKey(RunKey);
         if (!enabled)
         {

@@ -1,8 +1,14 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace PsExporter.Models;
 
 /// <summary>全局应用设置（持久化到 %AppData%/PsExporter/settings.json）</summary>
 public sealed class AppSettings
 {
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
     public const double DefaultWindowWidth = 440;
     public const double DefaultWindowHeight = 660;
     public const double MinimumWindowWidth = 360;

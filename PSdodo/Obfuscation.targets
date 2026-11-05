@@ -53,6 +53,9 @@
       <_ObfuscarConfigLines Include="  &lt;Var name=&quot;SkipGenerated&quot; value=&quot;true&quot; /&gt;" />
       <_ObfuscarConfigLines Include="  &lt;Var name=&quot;SkipSpecialName&quot; value=&quot;true&quot; /&gt;" />
       <_ObfuscarConfigLines Include="  &lt;Module file=&quot;$(ObfuscationInput)$(AssemblyName).dll&quot;&gt;" />
+      <!-- The release self-tests also run against the obfuscated assembly. -->
+      <_ObfuscarConfigLines Include="    &lt;SkipType name=&quot;PsExporter.AppProfile&quot; skipMethods=&quot;true&quot; /&gt;" />
+      <_ObfuscarConfigLines Include="    &lt;SkipType name=&quot;PsExporter.Services.WindowsStartup&quot; skipMethods=&quot;true&quot; /&gt;" />
       <_ObfuscarConfigLines Include="    &lt;SkipType name=&quot;PsExporter.ViewLocator&quot; skipMethods=&quot;true&quot; skipFields=&quot;true&quot; skipProperties=&quot;true&quot; skipEvents=&quot;true&quot; skipStringHiding=&quot;true&quot; /&gt;" />
       <_ObfuscarConfigLines Include="    &lt;SkipMethod type=&quot;PsExporter.Views.*&quot; name=&quot;DwmSetWindowAttribute&quot; /&gt;" />
       <_ObfuscarConfigLines Include="    &lt;SkipMethod type=&quot;PsExporter.Views.MainWindow&quot; name=&quot;SetWindowLongPtr&quot; /&gt;" />

@@ -10,13 +10,12 @@ namespace PsExporter;
 
 class Program
 {
-    private const string InstanceName = @"Local\PSexpV3";
     internal static string ExportPipeName
     {
         get
         {
             using var process = System.Diagnostics.Process.GetCurrentProcess();
-            return "PSexpV3.Export." + process.SessionId;
+            return AppProfile.InstanceId + ".Export." + process.SessionId;
         }
     }
 
@@ -44,7 +43,7 @@ class Program
             return;
         }
 
-        using var singleInstance = new SingleInstanceCoordinator(InstanceName);
+        using var singleInstance = new SingleInstanceCoordinator(@"Local\" + AppProfile.InstanceId);
         if (!singleInstance.IsPrimary)
         {
             if (silentStartup) return;

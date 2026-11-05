@@ -126,7 +126,9 @@ public partial class MainWindow
         if (GetClassName(window, name, name.Capacity) == 0
             || name.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
             return null;
-        return GetWindowExecutable(window, excludeThisProcess: true);
+        if (GetWindowThreadProcessId(window, out var processId) == 0
+            || processId == (uint)Environment.ProcessId) return null;
+        return GetProcessExecutable(processId);
     }
 
     private void FinishSummonProgramPick(string? program = null, bool restoreWindow = true)

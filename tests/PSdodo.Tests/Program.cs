@@ -52,6 +52,44 @@ Directory.CreateDirectory(tempRoot);
 
 try
 {
+    Run("Build profile selects isolated or production directories and startup permissions", () =>
+    {
+        var isTestBuild = args.Contains("--test-profile");
+        Equal(isTestBuild, AppProfile.IsTestBuild);
+        Equal(isTestBuild ? "PsExporter-Test" : "PsExporter", Path.GetFileName(new SettingsService().DataDirectory));
+        Equal(isTestBuild ? "PSexp-Test" : "PSexp", Path.GetFileName(AppProfile.LocalDirectory));
+        Equal(isTestBuild ? "PSexpV3.Test" : "PSexpV3", AppProfile.InstanceId);
+        Equal(OperatingSystem.IsWindows() && !isTestBuild, WindowsStartup.CanConfigure);
+        var freshSettings = new SettingsService(Path.Combine(tempRoot, "new-profile", "settings.json")).Load();
+        Equal(isTestBuild ? "" : AppSettings.DefaultSummonHotkey, freshSettings.SummonHotkey);
+    });
+
+    Run("Startup registration resolves the existing executable and rejects stale commands", () =>
+    {
+        var executable = Path.Combine(tempRoot, "PSexp v3.0.exe");
+        var command = WindowsStartup.CommandFor(executable);
+        File.WriteAllText(executable, "");
+        Equal(executable, WindowsStartup.GetRegisteredExecutable(command));
+        Equal<string?>(null, WindowsStartup.GetRegisteredExecutable($"\" {WindowsStartup.Argument}"));
+        Equal<string?>(null, WindowsStartup.GetRegisteredExecutable($"\"{executable}\" --other"));
+        File.Delete(executable);
+        Equal<string?>(null, WindowsStartup.GetRegisteredExecutable(command));
+    });
+
+    Run("Saving a fresh settings snapshot preserves fields from newer versions", () =>
+    {
+        var settingsPath = Path.Combine(tempRoot, "future-settings.json");
+        File.WriteAllText(settingsPath, """{"defaultQuality":80,"futureSettings":{"enabled":true},"futureNullable":null}""");
+        var service = new SettingsService(settingsPath);
+        Equal(80, service.Load().DefaultQuality);
+        True(service.Save(new AppSettings { DefaultQuality = 60 }));
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(settingsPath));
+        var json = document.RootElement;
+        Equal(60, json.GetProperty("defaultQuality").GetInt32());
+        True(json.GetProperty("futureSettings").GetProperty("enabled").GetBoolean());
+        Equal(System.Text.Json.JsonValueKind.Null, json.GetProperty("futureNullable").ValueKind);
+    });
+
     Run("Export settings prepare writable directory", () =>
     {
         var exportPath = Path.Combine(tempRoot, "output");

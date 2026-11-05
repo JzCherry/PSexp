@@ -41,7 +41,12 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <InternalsVisibleTo Include="PSdodo.Tests" />
   </ItemGroup>
+
+  <PropertyGroup Condition="'$(PSexpTestBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);PSEXP_TEST_BUILD</DefineConstants>
+  </PropertyGroup>
 
   <!-- 裁剪依赖库时完整保留业务程序集和动态 COM 绑定器，避免反射/JSON/Avalonia 绑定失效。 -->
   <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">

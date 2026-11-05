@@ -43,22 +43,49 @@ public partial class MainViewModel
     [RelayCommand] private void SetCloseToTray(object? value) => CloseToTray = ParseBooleanCommandParameter(value);
 
     [ObservableProperty] private bool _silentStartupEnabled;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSilentStartupDescription))]
+    private string _silentStartupDescription = "";
+    [ObservableProperty] private string? _silentStartupExecutable;
+    public bool CanConfigureSilentStartup => WindowsStartup.CanConfigure;
+    public bool HasSilentStartupDescription => SilentStartupDescription.Length > 0;
 
     private void ReadSilentStartup()
     {
-        try { SilentStartupEnabled = WindowsStartup.IsEnabled(); }
-        catch (Exception error) { _fileLogger.Error("读取开机启动失败：" + error); }
+        if (!CanConfigureSilentStartup)
+        {
+            SilentStartupDescription = AppProfile.IsTestBuild ? "测试版不登记开机启动" : "仅支持 Windows";
+            return;
+        }
+        try
+        {
+            var registration = WindowsStartup.ReadRegistration();
+            SilentStartupExecutable = registration.ExecutablePath;
+            SilentStartupEnabled = SilentStartupExecutable is not null;
+            SilentStartupDescription = SilentStartupExecutable is { } executable
+                ? $"已登记 {Path.GetFileName(executable)}"
+                : registration.Exists ? "启动路径已失效，点「开启」重新登记" : "";
+        }
+        catch (Exception error)
+        {
+            SilentStartupEnabled = false;
+            SilentStartupExecutable = null;
+            SilentStartupDescription = "无法读取开机启动登记";
+            _fileLogger.Error("读取开机启动失败：" + error);
+        }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanConfigureSilentStartup))]
     private void SetSilentStartup(object? value)
     {
         var enabled = ParseBooleanCommandParameter(value);
         try
         {
             WindowsStartup.SetEnabled(enabled);
-            SilentStartupEnabled = enabled;
-            SettingsStatusText = enabled ? "已开启开机静默启动" : "已关闭开机静默启动";
+            ReadSilentStartup();
+            SettingsStatusText = enabled
+                ? SilentStartupEnabled ? "已登记开机静默启动" : SilentStartupDescription
+                : "已关闭开机静默启动";
         }
         catch (Exception error)
         {

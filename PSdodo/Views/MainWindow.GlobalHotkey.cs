@@ -117,7 +117,7 @@ public partial class MainWindow
 
         if (model.SummonHotkeyProgram.Length == 0)
             StopWatchingSummonForeground();
-        else if (!WatchSummonForeground(model) || !IsSummonProgramForeground(model))
+        else if (!WatchSummonForeground(model) || !IsSummonHotkeyAllowedInForeground(model))
         {
             UnregisterSummonHotkey();
             return;
@@ -165,14 +165,17 @@ public partial class MainWindow
         UnhookWinEvent(hook);
     }
 
-    private static bool IsSummonProgramForeground(MainViewModel model)
-        => model.SummonHotkeyProgram.Length == 0
-            || SummonHotkey.MatchesProgram(model.SummonHotkeyProgram, GetWindowExecutable(GetForegroundWindow()));
-
-    private static string? GetWindowExecutable(IntPtr window, bool excludeThisProcess = false)
+    private static bool IsSummonHotkeyAllowedInForeground(MainViewModel model)
     {
-        if (window == IntPtr.Zero || GetWindowThreadProcessId(window, out var processId) == 0) return null;
-        if (excludeThisProcess && processId == (uint)Environment.ProcessId) return null;
+        if (model.SummonHotkeyProgram.Length == 0) return true;
+        var window = GetForegroundWindow();
+        if (window == IntPtr.Zero || GetWindowThreadProcessId(window, out var processId) == 0) return false;
+        return processId == (uint)Environment.ProcessId
+            || SummonHotkey.MatchesProgram(model.SummonHotkeyProgram, GetProcessExecutable(processId));
+    }
+
+    private static string? GetProcessExecutable(uint processId)
+    {
         const uint queryLimitedInformation = 0x1000;
         using var process = OpenProcess(queryLimitedInformation, false, processId);
         if (process.IsInvalid) return null;
@@ -230,7 +233,7 @@ public partial class MainWindow
             if (args.KeyModifiers == KeyModifiers.None)
                 ReportSummonHotkeyStatus(model, model.SummonHotkeyProgram.Length == 0
                     ? $"{text} 已设为全局唤起键，会占用其他程序里的 {text}"
-                    : $"{text} 仅在 {model.SummonHotkeyProgramDisplay} 位于前台时用作唤起键");
+                    : $"{text} 在 PSexp 或 {model.SummonHotkeyProgramDisplay} 位于前台时用作唤起键");
             StopSummonHotkeyCapture();
             return;
         }
@@ -242,7 +245,7 @@ public partial class MainWindow
     private void OnSummonHotkeyMessage() => Dispatcher.UIThread.Post(() =>
     {
         if (!_summonHotkeyRegistered || IsCapturingSummonHotkey || DataContext is not MainViewModel model
-            || !IsSummonProgramForeground(model)) return;
+            || !IsSummonHotkeyAllowedInForeground(model)) return;
         model.LogDockAnimation(
             $"[hotkey] received key={model.SummonHotkey} docked={_isDocked} animating={_isSnapAnimating}");
         SummonFromHotkey();

@@ -1006,8 +1006,14 @@
                                             </Grid>
                                         <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDelayStartupLine}"/>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowStartupSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="开机静默启动" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="登录 Windows 后在托盘运行。可用托盘图标或热键打开主窗口。"/>
-                                                <Panel Grid.Column="1">
+                                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                    <TextBlock Text="开机静默启动" Classes="setting-label" ToolTip.Tip="登录 Windows 后在托盘运行。可用托盘图标或热键打开主窗口。"/>
+                                                    <TextBlock Text="{Binding SilentStartupDescription}" Classes="setting-description"
+                                                               IsVisible="{Binding HasSilentStartupDescription}"
+                                                               TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding SilentStartupExecutable}"/>
+                                                </StackPanel>
+                                                <Panel Grid.Column="1" VerticalAlignment="Center">
                                                     <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding SilentStartupEnabled}">
                                                         <controls:SegmentPanel>
                                                             <Button Classes="seg" Command="{Binding SetSilentStartupCommand}" CommandParameter="False" AutomationProperties.Name="开机静默启动：关闭">
@@ -1032,7 +1038,7 @@
                                     <controls:ContinuousBorder Classes="settings-section">
                                         <StackPanel>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowHotkeySetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                <TextBlock Text="唤起热键" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="在绑定的程序中按热键唤回主窗口。未绑定时全局生效。字母和数字需搭配修饰键，F1–F12 可以单用。"/>
+                                                <TextBlock Text="唤起热键" Classes="setting-label" VerticalAlignment="Center" ToolTip.Tip="在 PSexp 或绑定的程序中按热键唤回主窗口。未绑定时全局生效。字母和数字需搭配修饰键，F1–F12 可以单用。"/>
                                                 <Button Grid.Column="1" Classes="secondary settings-directory-action" Content="{Binding SummonHotkeyDisplay}"
                                                     MinWidth="0" Padding="{StaticResource Padding.Secondary}" FontSize="{StaticResource FontSize.Caption}"
                                                     Click="OnSummonHotkeyClick" LostFocus="OnSummonHotkeyLostFocus" ToolTip.Tip="点击后按下新组合键；退格清空即关闭；Esc 或再次点击取消。"
@@ -1041,7 +1047,7 @@
                                             <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowHotkeyProgramLine}"/>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowHotkeyProgramSetting}" ColumnDefinitions="*,176" ColumnSpacing="12">
                                                 <TextBlock Text="快捷键绑定程序" Classes="setting-label" VerticalAlignment="Center"
-                                                           ToolTip.Tip="仅在绑定程序位于前台时启用唤起热键。清空绑定后，热键全局生效。"/>
+                                                           ToolTip.Tip="PSexp 或绑定的程序位于前台时，唤起热键生效。清空绑定后，热键全局生效。"/>
                                                 <Grid Grid.Column="1" ColumnDefinitions="*,32,32" ColumnSpacing="4" VerticalAlignment="Center">
                                                     <Grid.Styles>
                                                         <Style Selector="Button.secondary">

@@ -19,7 +19,9 @@ public partial class MainViewModel
     [ObservableProperty] private bool _isUpdateBusy;
     [ObservableProperty] private bool _isInstallingUpdate;
     [ObservableProperty] private double _updateProgress;
-    [ObservableProperty] private string _updateStatus = "启动后自动检查更新";
+    [ObservableProperty] private string _updateStatus = AppProfile.IsTestBuild
+        ? "测试版请通过编译脚本更新"
+        : "启动后自动检查更新";
     [ObservableProperty] private string _updateChangelog = "";
     public bool HasUpdateChangelog => !string.IsNullOrWhiteSpace(UpdateChangelog);
     partial void OnUpdateChangelogChanged(string value) => OnPropertyChanged(nameof(HasUpdateChangelog));
@@ -33,7 +35,7 @@ public partial class MainViewModel
     internal bool IsUpdateDownloaded => _downloadedUpdate is not null;
     public string SettingsToggleHint => IsViewSetting ? "返回导出界面"
         : IsUpdateAvailable ? "发现新版本，进入设置更新" : "设置";
-    public bool CanCheckUpdates => !IsUpdateBusy;
+    public bool CanCheckUpdates => !AppProfile.IsTestBuild && !IsUpdateBusy;
     public bool CanApplyUpdate => !IsBusy && !IsExporting && !IsUpdateBusy && _pendingUpdate is not null;
     private UpdateService Updater => _updater ??= new UpdateService(_fileLogger);
     partial void OnAutoCheckForUpdatesChanged(bool value) => SaveBehaviorSettings();
@@ -51,7 +53,7 @@ public partial class MainViewModel
     }
     public async Task InitializeUpdatesAsync()
     {
-        if (_updatesStarted) return;
+        if (AppProfile.IsTestBuild || _updatesStarted) return;
         _updatesStarted = true;
         try
         {
@@ -69,7 +71,7 @@ public partial class MainViewModel
     private Task CheckForUpdatesAsync() => CheckUpdateCoreAsync();
     private async Task CheckUpdateCoreAsync(bool automatic = false)
     {
-        if (IsUpdateBusy) return;
+        if (!CanCheckUpdates) return;
         IsUpdateBusy = true;
         UpdateProgress = 0;
         UpdateStatus = "正在检查更新…";
