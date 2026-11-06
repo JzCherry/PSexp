@@ -28,7 +28,7 @@ public static class ScriptLibrary
             if (stream is not null)
             {
                 using var reader = new StreamReader(stream);
-                return ComposeLayerTargets(logicalName, reader.ReadToEnd());
+                return ComposeHelpers(logicalName, reader.ReadToEnd());
             }
         }
 
@@ -44,7 +44,7 @@ public static class ScriptLibrary
                 if (stream is not null)
                 {
                     using var reader = new StreamReader(stream);
-                    return ComposeLayerTargets(logicalName, reader.ReadToEnd());
+                    return ComposeHelpers(logicalName, reader.ReadToEnd());
                 }
             }
         }
@@ -53,9 +53,15 @@ public static class ScriptLibrary
             $"找不到嵌入脚本资源: {logicalName}。可用资源: {string.Join(", ", _asm.GetManifestResourceNames())}");
     }
 
-    private static string ComposeLayerTargets(string logicalName, string script)
-        => logicalName == ScriptNames.ExportLayerBatch
-            ? GetScript("export/layer_targets") + "\n" + script : script;
+    private static string ComposeHelpers(string logicalName, string script)
+    {
+        if (logicalName == ScriptNames.ExportLayerBatch)
+            script = GetScript("export/layer_targets") + "\n" + script;
+        if (logicalName is ScriptNames.ExportLayerBatch or ScriptNames.ExportSlices
+            or ScriptNames.ExportQuick or ScriptNames.ExportAllArtboards or ScriptNames.ExportSelectedArtboards)
+            script = GetScript("export/export_names") + "\n" + script;
+        return script;
+    }
 
     /// <summary>正则提取脚本中所有 {{NAME}} 占位符（去重）</summary>
     public static IReadOnlyCollection<string> ExtractPlaceholders(string script)

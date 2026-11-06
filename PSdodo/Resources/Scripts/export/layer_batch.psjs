@@ -20,8 +20,7 @@ let stage = "创建任务回执";
 let activePath = resultFolderUrl;
 
 function safeName(value) {
-    const name = String(value).replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").replace(/[. ]+$/, "");
-    return name || "未命名";
+    return psxSafeName(value);
 }
 
 async function report() {
@@ -118,7 +117,7 @@ async function exportBatch(executionContext) {
     const prefix = imageName ? safeName(imageName) : (withDocName ? docName : "");
 
     async function saveTarget(document, target) {
-        const stem = (prefix ? prefix + "_" : "") + safeName(target.name);
+        const stem = safeName((prefix ? prefix + "_" : "") + safeName(target.name));
         let name = stem + "." + format;
         if (rename) {
             let index = 1;
@@ -126,8 +125,10 @@ async function exportBatch(executionContext) {
         }
         stage = "创建导出文件";
         activePath = exportFolderUrl + "/" + name;
+        await report();
         const entry = await folder.createFile(name, { overwrite: !rename });
         stage = "保存 " + format.toUpperCase() + " 副本";
+        await report();
         if (format === "png") await document.saveAs.png(entry, {}, true);
         else if (format === "jpg") await document.saveAs.jpg(entry, { quality: Math.round(12 * quality / 100) }, true);
         else throw new Error("不支持的导出格式: " + format);

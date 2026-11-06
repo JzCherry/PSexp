@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const template = fs.readFileSync(path.join(__dirname, "../../PSdodo/Resources/Scripts/export/layer_targets.psjs"), "utf8")
+const template = fs.readFileSync(path.join(__dirname, "../../PSdodo/Resources/Scripts/export/export_names.psjs"), "utf8")
+    + "\n" + fs.readFileSync(path.join(__dirname, "../../PSdodo/Resources/Scripts/export/layer_targets.psjs"), "utf8")
     + "\n" + fs.readFileSync(path.join(__dirname, "../../PSdodo/Resources/Scripts/export/layer_batch.psjs"), "utf8");
 
 async function run(options = {}) {
@@ -74,6 +75,14 @@ async function run(options = {}) {
 
 (async () => {
     const tests = {
+        async "unsafe layer characters normalize and collisions receive suffixes"() {
+            const { saves, result } = await run({ layers: [
+                { id: 1, name: "海报\r\n😀\u0001\ufffd\ud800", visible: true },
+                { id: 2, name: "海报\r\n😀\u0001\ufffd\ud800", visible: true }
+            ] });
+            assert.deepEqual(saves.map(save => save.name), ["设计_海报__😀___.png", "设计_海报__😀____1.png"]);
+            assert.equal(result.success, true);
+        },
         async "top-level exports include hidden targets and skip excluded targets"() {
             const { saves, result } = await run({});
             assert.deepEqual(saves.map(save => save.name), ["设计_首层.png", "设计_次层.png", "设计_隐藏层.png"]);

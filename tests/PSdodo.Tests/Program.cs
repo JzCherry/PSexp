@@ -19,6 +19,21 @@ Run("JavaScript string escaping", () =>
     Equal("C:\\\\Bob\\'s\\nfile", escaped);
 });
 
+Run("JavaScript escaping protects control characters and UTF-16", () =>
+{
+    Equal("\\u0000\\u0009\\u0085\\u2028\\u2029\\ufffd\\ud800\\ud83d\\ude00",
+        ScriptParameterInjector.EscapeJsString("\0\t\u0085\u2028\u2029\ufffd\ud800😀"));
+});
+
+Run("Export names preserve Unicode and normalize unsupported characters", () =>
+{
+    Equal("海报__😀___", ExportName.Normalize("海报\r\n😀\u0001\ufffd\ud800"));
+    Equal("_CON", ExportName.Normalize("CON"));
+    Equal("_nul.png", ExportName.Normalize("nul.png"));
+    Equal("未命名", ExportName.Normalize("..."));
+    Equal("中文👩‍💻", ExportName.Normalize("中文👩‍💻"));
+});
+
 Run("Export settings reject relative paths", () =>
 {
     var settings = new ExportSettings { ExportPath = "relative-output" };
@@ -792,9 +807,11 @@ try
         var receipt = Path.Combine(output, "result.json");
         var image = Path.Combine(output, "partial.png");
         File.WriteAllText(image, "image");
-        File.WriteAllText(receipt, "{\"done\":false,\"files\":[\"partial.png\"]}");
+        File.WriteAllText(receipt, "{\"done\":false,\"files\":[\"partial.png\"],\"stage\":\"保存 PNG 副本\",\"path\":\"test.png\"}");
         var result = await UxpTaskWatcher.WaitForCompletionAsync(receipt, output, timeoutMs: 300);
         True(result.Error is TimeoutException);
+        True(result.Error!.Message.Contains("保存 PNG 副本"));
+        True(result.Error.Message.Contains("test.png"));
         Equal(1, result.ExportedCount);
         True(File.Exists(image));
         True(File.Exists(receipt));

@@ -56,7 +56,20 @@ public sealed class ExportPresetsStorage
                 _backupBeforeWrite = false;
             }
             File.WriteAllText(temporary, JsonSerializer.Serialize(state, Options), new UTF8Encoding(false));
-            File.Move(temporary, _path, overwrite: true);
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    File.Move(temporary, _path, overwrite: true);
+                    break;
+                }
+                catch (Exception error) when (attempt < 3 && OperatingSystem.IsWindows()
+                    && (error is UnauthorizedAccessException || error is IOException && (error.HResult & 0xFFFF) is 32 or 33))
+                {
+                    // Short-lived file handles can block the atomic replacement on Windows.
+                    Thread.Sleep(20);
+                }
+            }
             Error = "";
             return true;
         }

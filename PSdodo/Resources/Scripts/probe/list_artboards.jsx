@@ -5,7 +5,9 @@ function listArtboards() {
     function jsonStr(s) {
         s = String(s);
         s = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-             .replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+             .replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\ud800-\udfff]/g, function (ch) {
+                 return '\\u' + ('0000' + ch.charCodeAt(0).toString(16)).slice(-4);
+             });
         return '"' + s + '"';
     }
     var result = [];

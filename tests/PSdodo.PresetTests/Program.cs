@@ -35,7 +35,7 @@ internal static class PresetTests
         void Save(string name)
         {
             vm.SaveNewPresetCommand.Execute(null); vm.PresetEditorName = name; vm.ConfirmPresetEditorCommand.Execute(null);
-            Check(!vm.IsPresetEditorOpen && vm.PresetDisplayName == name, "save " + name);
+            Check(!vm.IsPresetEditorOpen && vm.PresetDisplayName == name, $"save {name} {vm.PresetEditorError}");
         }
         try
         {
@@ -56,7 +56,8 @@ internal static class PresetTests
             vm.Quality = 91; vm.ImageName = "hero"; vm.SaveAndCloseAfterExport = true; Save("电商");
             Check(!vm.IsPresetModified, "saved preset matches current parameters");
             vm.SaveAndCloseAfterExport = false;
-            Check(vm.IsPresetModified, "save-and-close participates in modified state");
+            Check(vm.ShowPresetUpdate && vm.SaveCurrentPresetCommand.CanExecute(null),
+                "changing only save-and-close exposes the update preset button");
             vm.RestorePresetCommand.Execute(null);
             Check(vm.SaveAndCloseAfterExport && !vm.IsPresetModified, "restore applies saved save-and-close without exporting");
             vm.Quality = 88;
@@ -179,7 +180,10 @@ internal static class PresetTests
             vm.Destination = ExportDestination.Custom;
             vm.UseDocumentNameAsFallbackPrefix = true;
             vm.ImageName = "手动前缀";
+            Check(vm.ShowPresetUpdate && vm.SaveCurrentPresetCommand.CanExecute(null),
+                $"the selected preset can be updated after running a saved command (busy={vm.IsBusy}, preset={vm.PresetDisplayName}, modified={vm.IsPresetModified})");
             vm.SaveCurrentPresetCommand.Execute(null);
+            Check(!vm.IsPresetModified, $"the updated preset matches the current parameters ({vm.PresetStatusMessage})");
             vm.SaveAndCloseAfterExport = true;
             Check(start.Invoke(vm, [ExportInvocation.ForPresetName(ExportPresetCategory.Slices, preset.Name)]) is true,
                 "external execution also resolves a saved preset by name");

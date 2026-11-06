@@ -11,8 +11,6 @@ public static class ExportFilePrefix
     public static string Normalize(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return "";
-        var invalid = Path.GetInvalidFileNameChars();
-        var name = new string(value.Trim().Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).TrimEnd('.', ' ');
-        return name.Length == 0 ? "未命名" : name;
+        return ExportName.Normalize(value);
     }
 }

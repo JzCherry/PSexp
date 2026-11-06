@@ -25,6 +25,7 @@ public sealed class ExportService : IExportService
     // 三个快速导出走 UXP（.psjs 文件关联触发，支持 batchPlay + executeAsModal）
     public async Task<PsBridgeResult> QuickExportAsync(ExportSettings s, ExportProgressHandler? onProgress = null, CancellationToken ct = default)
     {
+        var timer = System.Diagnostics.Stopwatch.StartNew();
         var finalDirectory = s.ExportPath;
         var tempDirectory = Path.Combine(Path.GetTempPath(), "PSexp", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -38,7 +39,9 @@ public sealed class ExportService : IExportService
                 temporarySettings,
                 onProgress: null,
                 ct);
+            var scriptAndReceiptMs = timer.ElapsedMilliseconds;
             var merged = MergeQuickExportOutputs(result, finalDirectory, s.ImageName, s.AutoRename, onProgress);
+            _logger.Info($"[quick-export] 分段耗时 scriptAndReceiptMs={scriptAndReceiptMs} mergeMs={timer.ElapsedMilliseconds - scriptAndReceiptMs} totalMs={timer.ElapsedMilliseconds} success={merged.Success}");
             delivered = merged.Success;
             return merged;
         }
@@ -199,7 +202,9 @@ public sealed class ExportService : IExportService
         var result = await UxpTaskWatcher.WaitForCompletionAsync(Path.Combine(directory, "result.json"), exportPath: null);
         if (result.Success)
         {
-            await _uxpBridge.CleanupTempFileAsync(dispatched.TempFilePath);
+            // A successful terminal receipt already confirms completion. Keep the deletion
+            // grace period in the background instead of delaying the next user operation.
+            _ = _uxpBridge.CleanupTempFileAsync(dispatched.TempFilePath);
             try { Directory.Delete(directory, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
@@ -283,7 +288,9 @@ public sealed class ExportService : IExportService
         _logger.Debug($"[task={taskId}] 注入参数={System.Text.Json.JsonSerializer.Serialize(args.Where(pair => pair.Key is not ("SCRIPT_BODY" or "EXISTING_EXPORT_NAMES")).ToDictionary(pair => pair.Key, pair => pair.Value))}；脚本SHA256={Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(script)))}");
         var backgroundSnapshot = args.GetValueOrDefault("WAIT_FOR_BACKGROUND_EXPORT") == "true"
             ? ExportFileWatcher.CaptureSnapshot(s.ExportPath, s.Format.ToExtension()) : null;
+        var phaseTimer = System.Diagnostics.Stopwatch.StartNew();
         var dispatched = await _uxpBridge.ExecuteAsync(script, ct);
+        var dispatchMs = phaseTimer.ElapsedMilliseconds;
         _logger.Info($"[task={taskId}] 脚本启动 success={dispatched.Success} path={dispatched.TempFilePath}");
         if (dispatched.Error is not null) _logger.Error($"[task={taskId}] 脚本启动异常：{dispatched.Error}");
         if (!dispatched.Success) return PsBridgeResult.Failed(dispatched.Error ?? new IOException("UXP 脚本启动失败"));
@@ -292,12 +299,15 @@ public sealed class ExportService : IExportService
             (name, count) => onProgress?.Invoke(name, count), ct,
             backgroundSnapshot: backgroundSnapshot, expectedFileCount: s.ExpectedFileCount,
             onBackgroundSubmitted: receipt => _logger.Info($"[task={taskId}] 已提交后台导出，等待图片写入；回执={receipt}"));
+        _logger.Info($"[task={taskId}] 分段耗时 dispatchMs={dispatchMs} receiptAndWriteMs={phaseTimer.ElapsedMilliseconds - dispatchMs}");
         _logger.Info($"[task={taskId}] 回执={result.ReturnValue}");
         if (backgroundSnapshot is not null)
             _logger.Info($"[task={taskId}] 后台图片写入确认 success={result.Success} count={result.ExportedCount} files={System.Text.Json.JsonSerializer.Serialize(result.OutputFiles)}");
         if (result.Success && !string.IsNullOrEmpty(result.ReturnValue))
         {
-            await _uxpBridge.CleanupTempFileAsync(dispatched.TempFilePath);
+            // Retain the delayed cleanup for Photoshop, but release the confirmed export
+            // immediately so quick-output merge and the completion notice do not wait 2s.
+            _ = _uxpBridge.CleanupTempFileAsync(dispatched.TempFilePath);
             try { Directory.Delete(taskDirectory, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
@@ -486,11 +496,7 @@ public sealed class ExportService : IExportService
 
     private static string SanitizeFileStem(string value)
     {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var sanitized = new string(value.Trim()
-            .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
-            .ToArray());
-        return sanitized.Trim().TrimEnd('.');
+        return ExportName.Normalize(value);
     }
 
     private static string GetAvailableFilePath(string desiredPath)

@@ -6,6 +6,7 @@ const { batchPlay } = action;
 
 async function exportSelectedArtboards() {
     const doc = app.activeDocument;
+    psxCheckNativeNames(doc, doc.activeLayers);
     const sourceDocument = getExportSource(doc);
     const exportPath = "{{EXPORT_PATH}}";
     const format = "{{FORMAT}}".toLowerCase();

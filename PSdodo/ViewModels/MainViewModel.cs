@@ -877,7 +877,9 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
+            var syncWaitTimer = System.Diagnostics.Stopwatch.StartNew();
             if (pendingRefresh is not null) await pendingRefresh;
+            AppendLog("Debug", $"导出准备 mode={mode} pendingSyncMs={syncWaitTimer.ElapsedMilliseconds}");
             await PrepareAndRunExportAsync(mode, preset, saveAndClose);
         }
         finally
@@ -890,7 +892,9 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task PrepareAndRunExportAsync(ExportMode mode, ExportPresetParameters? preset, bool saveAndClose)
     {
+        var probeTimer = System.Diagnostics.Stopwatch.StartNew();
         await RefreshStatusCoreAsync(silent: true, quiet: false);
+        AppendLog("Debug", $"导出准备 mode={mode} documentProbeMs={probeTimer.ElapsedMilliseconds}");
         var destination = preset?.Destination ?? Destination;
         var exportSettings = Snapshot(mode, preset);
         var problem = !IsPsRunning || !IsBridgeAvailable || !HasDocument || !string.IsNullOrEmpty(DocumentProbeError)

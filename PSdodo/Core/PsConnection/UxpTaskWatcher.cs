@@ -21,6 +21,8 @@ public static class UxpTaskWatcher
         var reported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         IReadOnlyList<string> files = [];
         var receivedReceipt = false;
+        var lastStage = "尚未收到执行阶段";
+        var lastPath = "";
         while (timer.ElapsedMilliseconds < timeoutMs)
         {
             ct.ThrowIfCancellationRequested();
@@ -36,6 +38,8 @@ public static class UxpTaskWatcher
             if (status is not null)
             {
                 receivedReceipt = true;
+                lastStage = status.Stage ?? lastStage;
+                lastPath = status.Path ?? lastPath;
                 var names = status.Files ?? [];
                 var validNames = names.Where(name => !string.IsNullOrWhiteSpace(name)
                     && Path.GetFileName(name) == name && !Path.IsPathRooted(name)
@@ -64,7 +68,7 @@ public static class UxpTaskWatcher
                 }
             }
             if (!receivedReceipt && timer.ElapsedMilliseconds >= FirstReceiptTimeoutMs)
-                return PsBridgeResult.Failed(new TimeoutException("Photoshop 未返回任务回执，请检查脚本启动和目录权限：" + resultPath));
+                return PsBridgeResult.Failed(new TimeoutException("Photoshop 未返回任务回执，无法确认脚本是否启动。请检查 Photoshop 的脚本错误提示和目录权限；任务记录：" + resultPath));
             await Task.Delay(250, ct);
         }
         return new PsBridgeResult
@@ -72,7 +76,8 @@ public static class UxpTaskWatcher
             Success = false, OutputFiles = files, ExportedCount = files.Count,
             Error = new TimeoutException((exportPath is null
                 ? "等待 Photoshop 操作回执超时，Photoshop 可能仍在执行。任务记录："
-                : "等待 UXP 导出回执超时；Photoshop 可能仍在执行，已保留输出和任务记录：") + resultPath)
+                : "等待 UXP 导出回执超时；Photoshop 可能仍在执行，已保留输出和任务记录：") + resultPath
+                + $"；最后阶段：{lastStage}；对象/路径：{JsonSerializer.Serialize(lastPath)}")
         };
     }
 
@@ -116,5 +121,7 @@ public static class UxpTaskWatcher
         public string? Format { get; set; }
         public List<string>? Files { get; set; }
         public string? Error { get; set; }
+        public string? Stage { get; set; }
+        public string? Path { get; set; }
     }
 }

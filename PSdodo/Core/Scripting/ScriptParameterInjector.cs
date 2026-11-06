@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace PsExporter.Core.Scripting;
@@ -27,10 +28,23 @@ public static class ScriptParameterInjector
     public static string EscapeJsString(string? s)
     {
         if (s is null) return string.Empty;
-        return s.Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("'", "\\'")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r");
+        var result = new StringBuilder(s.Length);
+        foreach (var ch in s)
+        {
+            switch (ch)
+            {
+                case '\\': result.Append("\\\\"); break;
+                case '"': result.Append("\\\""); break;
+                case '\'': result.Append("\\'"); break;
+                case '\n': result.Append("\\n"); break;
+                case '\r': result.Append("\\r"); break;
+                default:
+                    if (char.IsControl(ch) || char.IsSurrogate(ch) || ch is '\u2028' or '\u2029' or '\ufffd')
+                        result.Append("\\u").Append(((int)ch).ToString("x4"));
+                    else result.Append(ch);
+                    break;
+            }
+        }
+        return result.ToString();
     }
 }

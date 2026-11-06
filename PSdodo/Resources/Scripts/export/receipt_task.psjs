@@ -15,6 +15,7 @@ try {
     taskState.path = "{{EXPORT_FOLDER_URL}}";
     await taskFile.write(JSON.stringify(taskState));
     const exportResult = await runExport();
+    taskState.timings = exportResult && exportResult.timings;
     taskState.sourceDocument = exportResult && exportResult.sourceDocument;
     taskState.warning = exportResult && typeof exportResult.warning === "string" ? exportResult.warning : "";
     if ({{WAIT_FOR_BACKGROUND_EXPORT}}) {

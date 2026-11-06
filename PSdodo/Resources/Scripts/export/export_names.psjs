@@ -1,0 +1,47 @@
+// Filename rules shared by UXP export modes. Never change names in the source document.
+function psxSafeName(value, fallback = "未命名") {
+    const text = String(value == null ? "" : value);
+    let name = "";
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length &&
+            text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+            name += text[i] + text[++i];
+        } else {
+            name += /[\\/:*?"<>|\x00-\x1f\x7f-\x9f\u2028\u2029\ufffd]/.test(text[i]) ||
+                (code >= 0xd800 && code <= 0xdfff) ? "_" : text[i];
+        }
+    }
+    name = name.trim().replace(/[. ]+$/, "") || fallback;
+    if (/^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/i.test(name)) name = "_" + name;
+    return name;
+}
+
+// Native Export As chooses filenames internally; refuse unsafe names before submitting
+// its asynchronous command, since renaming/restoring the source races background export.
+function psxCheckNativeNames(doc, layers) {
+    function check(value, kind) {
+        const text = String(value == null ? "" : value);
+        if (text === psxSafeName(text)) return;
+        const codes = [];
+        for (let i = 0; i < text.length; i++) {
+            const code = text.charCodeAt(i);
+            if (/[\\/:*?"<>|\x00-\x1f\x7f-\x9f\u2028\u2029\ufffd]/.test(text[i]) ||
+                (code >= 0xd800 && code <= 0xdfff &&
+                 !(code <= 0xdbff && i + 1 < text.length && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) &&
+                 !(code >= 0xdc00 && i > 0 && text.charCodeAt(i - 1) >= 0xd800 && text.charCodeAt(i - 1) <= 0xdbff)))
+                codes.push("U+" + code.toString(16).toUpperCase().padStart(4, "0"));
+        }
+        throw new Error(kind + "名称 " + JSON.stringify(text) + " 无法安全用于 Photoshop 原生画板导出（" +
+            (codes.length ? codes.join("、") : "空名称、末尾空格/句点或系统保留名称") +
+            "）。请将名称改为 " + JSON.stringify(psxSafeName(text)) + " 后重试；本次尚未提交后台导出。");
+    }
+    check(doc.name, "文档");
+    function visit(items) {
+        for (const layer of Array.from(items || [])) {
+            check(layer.name, "画板/图层 ID=" + layer.id + " 的");
+            // Export As names this target as one image; internal child names are irrelevant.
+        }
+    }
+    visit(layers);
+}
