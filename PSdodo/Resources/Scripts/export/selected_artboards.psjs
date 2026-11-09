@@ -20,7 +20,7 @@ async function exportSelectedArtboards() {
         const layers = Array.from(doc.activeLayers);
         if (layers.length) {
             const descriptors = await batchPlay(layers.map(layer => ({
-                _obj: "get", _target: [{ _ref: "layer", _id: layer.id }],
+                _obj: "get", _target: [{ _property: "artboardEnabled" }, { _ref: "layer", _id: layer.id }],
                 _options: { dialogOptions: "dontDisplay" }
             })), {});
             if (descriptors.length === layers.length && descriptors.every(item => item._obj !== "error"))

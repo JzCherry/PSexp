@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -16,9 +17,12 @@ public static class ScriptLibrary
 
     // 支持的扩展名（按优先级）：.psjs 优先（UXP），.jsx 兜底（ExtendScript）
     private static readonly string[] _extensions = { ".psjs", ".jsx" };
+    private static readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.Ordinal);
 
     /// <summary>读取脚本原文（未注入参数）</summary>
-    public static string GetScript(string logicalName)
+    public static string GetScript(string logicalName) => _cache.GetOrAdd(logicalName, LoadScript);
+
+    private static string LoadScript(string logicalName)
     {
         // 先按扩展名逐个尝试精确匹配
         foreach (var ext in _extensions)

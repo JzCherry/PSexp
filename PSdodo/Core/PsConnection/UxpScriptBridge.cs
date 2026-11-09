@@ -17,7 +17,6 @@ namespace PsExporter.Core.PsConnection;
 /// </summary>
 public sealed class UxpScriptBridge
 {
-    private const int DispatchDelayMs = 500;
     private const int CleanupDelayMs = 2_000;
 
     /// <summary>
@@ -45,9 +44,6 @@ public sealed class UxpScriptBridge
             else
                 using (System.Diagnostics.Process.Start(new ProcessStartInfo(tempFile) { UseShellExecute = true })) { }
             dispatched = true;
-
-            // Photoshop 接收脚本的短窗口内只检查一次焦点；租约结束时再确认一次。
-            await Task.Delay(DispatchDelayMs, ct);
 
             return new UxpResult
             {

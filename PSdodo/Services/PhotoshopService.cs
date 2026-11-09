@@ -71,10 +71,9 @@ public sealed partial class PhotoshopService : IPhotoshopService
     {
         var template = ScriptLibrary.GetScript(scriptName);
         var script = ScriptParameterInjector.Inject(template, args);
-        var logPath = Path.Combine(Path.GetTempPath(), $"psx_{System.Guid.NewGuid():N}.log");
         try
         {
-            return await _bridge.ExecuteAsync(script, logPath, ct);
+            return await _bridge.ExecuteAsync(script, null, ct);
         }
         catch (PsNotConnectedException ex)
         {

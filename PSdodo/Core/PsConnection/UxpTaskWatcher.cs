@@ -9,6 +9,7 @@ public static class UxpTaskWatcher
 {
     public const int DefaultTimeoutMs = 30 * 60 * 1000;
     public const int FirstReceiptTimeoutMs = 30_000;
+    public const int PollIntervalMs = 20;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static async Task<PsBridgeResult> WaitForCompletionAsync(
@@ -30,8 +31,8 @@ public static class UxpTaskWatcher
             string json = "";
             try
             {
-                json = await File.ReadAllTextAsync(resultPath, ct);
-                status = JsonSerializer.Deserialize<UxpTaskStatus>(json, JsonOptions);
+                if (File.Exists(resultPath)) json = await File.ReadAllTextAsync(resultPath, ct);
+                if (json.Length > 0) status = JsonSerializer.Deserialize<UxpTaskStatus>(json, JsonOptions);
             }
             catch (IOException) { /* 文件尚未创建，或脚本正在写入。 */ }
             catch (JsonException) { /* 下一轮读取完整 JSON。 */ }
@@ -69,7 +70,7 @@ public static class UxpTaskWatcher
             }
             if (!receivedReceipt && timer.ElapsedMilliseconds >= FirstReceiptTimeoutMs)
                 return PsBridgeResult.Failed(new TimeoutException("Photoshop 未返回任务回执，无法确认脚本是否启动。请检查 Photoshop 的脚本错误提示和目录权限；任务记录：" + resultPath));
-            await Task.Delay(250, ct);
+            await Task.Delay(PollIntervalMs, ct);
         }
         return new PsBridgeResult
         {

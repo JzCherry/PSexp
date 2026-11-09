@@ -528,10 +528,12 @@ public partial class MainViewModel : ViewModelBase
         Artboards.Clear();
         _lastHasDocument = false;
         _lastDocName = string.Empty;
+        _lastSuccessfulProbeUtc = default;
     }
 
     [ObservableProperty] private string _documentProbeError = string.Empty;
     private DateTime _lastProbeErrorLoggedUtc;
+    private DateTime _lastSuccessfulProbeUtc;
     private string _lastProbeErrorLogged = string.Empty;
     private string _documentProbeActionHint = string.Empty;
 
@@ -621,6 +623,7 @@ public partial class MainViewModel : ViewModelBase
             }
 
             HasDocument = true;
+            _lastSuccessfulProbeUtc = DateTime.UtcNow;
             DocumentName = doc.Name;
             UpdateDocumentDirectory(doc.Path);
             DocumentSize = doc.Width > 0 ? $"{doc.Width} × {doc.Height}" : string.Empty;
@@ -866,6 +869,7 @@ public partial class MainViewModel : ViewModelBase
         var mode = preset?.Mode ?? SelectedMode;
         var saveAndClose = preset?.SaveAndCloseAfterExport ?? SaveAndCloseAfterExport;
         var pendingRefresh = _statusRefreshTask;
+        var refreshWasInFlight = pendingRefresh is { IsCompleted: false };
         IsPreparingExport = true;
         IsBusy = true;
         // 焦点租约挂满整个导出：Photoshop 可能在派发之后任意一刻才自己抢到前台，
@@ -880,7 +884,7 @@ public partial class MainViewModel : ViewModelBase
             var syncWaitTimer = System.Diagnostics.Stopwatch.StartNew();
             if (pendingRefresh is not null) await pendingRefresh;
             AppendLog("Debug", $"导出准备 mode={mode} pendingSyncMs={syncWaitTimer.ElapsedMilliseconds}");
-            await PrepareAndRunExportAsync(mode, preset, saveAndClose);
+            await PrepareAndRunExportAsync(mode, preset, saveAndClose, refreshWasInFlight);
         }
         finally
         {
@@ -890,10 +894,11 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private async Task PrepareAndRunExportAsync(ExportMode mode, ExportPresetParameters? preset, bool saveAndClose)
+    private async Task PrepareAndRunExportAsync(ExportMode mode, ExportPresetParameters? preset, bool saveAndClose, bool refreshWasInFlight = false)
     {
         var probeTimer = System.Diagnostics.Stopwatch.StartNew();
-        await RefreshStatusCoreAsync(silent: true, quiet: false);
+        if (!(IsPsRunning && IsBridgeAvailable && HasDocument && string.IsNullOrEmpty(DocumentProbeError) && !HasPendingDocumentChanges && (refreshWasInFlight || _documentEvents is { IsSubscribed: true } || (DateTime.UtcNow - _lastSuccessfulProbeUtc).TotalMilliseconds < 2000)))
+            await RefreshStatusCoreAsync(silent: true, quiet: false);
         AppendLog("Debug", $"导出准备 mode={mode} documentProbeMs={probeTimer.ElapsedMilliseconds}");
         var destination = preset?.Destination ?? Destination;
         var exportSettings = Snapshot(mode, preset);
@@ -1022,9 +1027,14 @@ public partial class MainViewModel : ViewModelBase
                 ExportStatusText = $"{title} 完成 · 共 {ExportedCount} 个文件"
                     + (string.IsNullOrWhiteSpace(exportWarning) ? "" : "；" + exportWarning);
                 AppendLog("Info", $"✔ {title} 完成");
+                if (!noticeResolved && ShowExportNotice && CanOpenExportFolder && ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
+                {
+                    noticeResolved = true;
+                    ExportCompleted?.Invoke(_lastSuccessfulExportDirectory, ExportedCount);
+                }
                 if (saveAndCloseProcessId is { } processId && result.ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
                     await SaveAndCloseExportedDocumentAsync(result.ReturnValue, processId);
-                if (ShowExportNotice && CanOpenExportFolder && ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
+                if (!noticeResolved && ShowExportNotice && CanOpenExportFolder && ExportedCount > 0 && !cancellationToken.IsCancellationRequested)
                 {
                     noticeResolved = true;
                     ExportCompleted?.Invoke(_lastSuccessfulExportDirectory, ExportedCount);

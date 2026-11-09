@@ -11,12 +11,23 @@ namespace PsExporter.Core.PsConnection;
 internal static class WindowsProcessPermissions
 {
     internal const string RelaunchArgument = "--psexp-normal-permissions";
+    private static readonly Lazy<AccessInfo?> SelfAccess = new(() => ReadUncached(Environment.ProcessId));
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, AccessInfo> ProcessAccessCache = new();
     internal sealed record AccessInfo(string UserSid, int Integrity)
     {
         public string Label => Integrity >= 0x3000 ? "管理员权限" : Integrity >= 0x2000 ? "普通权限" : "受限权限";
     }
 
     internal static AccessInfo? Read(int processId)
+    {
+        if (processId == Environment.ProcessId) return SelfAccess.Value;
+        if (ProcessAccessCache.TryGetValue(processId, out var cached)) return cached;
+        var info = ReadUncached(processId);
+        if (info is not null) ProcessAccessCache[processId] = info;
+        return info;
+    }
+
+    private static AccessInfo? ReadUncached(int processId)
     {
         if (!OperatingSystem.IsWindows()) return null;
         var process = OpenProcess(0x1000, false, processId); // QUERY_LIMITED_INFORMATION

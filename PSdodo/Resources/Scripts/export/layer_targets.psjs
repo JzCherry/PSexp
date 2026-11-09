@@ -1,12 +1,16 @@
 // 两种图层导出共用目标规则：排除前缀控制“不独立导出”，不是隐藏开关。
-function collectLayerExportNodes(doc) {
+function collectLayerExportNodes(doc, topLevelOnly = false) {
     const nodes = [];
     function visit(items, parents = [], excluded = false) {
         for (const layer of items) {
             const blocked = excluded || /^排除/.test(layer.name);
+            if (topLevelOnly) {
+                nodes.push({ layer, parents, blocked, group: layer.kind === "group" });
+                continue;
+            }
             const children = layer.layers ? Array.from(layer.layers) : [];
             nodes.push({ layer, parents, blocked, group: children.length > 0 || layer.kind === "group" });
-            visit(children, [...parents, layer.id], blocked);
+            if (children.length) visit(children, [...parents, layer.id], blocked);
         }
     }
     visit(Array.from(doc.layers));
@@ -14,7 +18,7 @@ function collectLayerExportNodes(doc) {
 }
 
 function resolveLayerExportTargets(doc, canvas, selectedOnly) {
-    const nodes = collectLayerExportNodes(doc);
+    const nodes = collectLayerExportNodes(doc, canvas && !selectedOnly);
     const selectedIds = new Set(selectedOnly ? Array.from(doc.activeLayers).map(layer => layer.id) : []);
     const targets = nodes.filter(node => !node.blocked && !node.layer.isBackgroundLayer &&
         (canvas ? node.parents.length === 0 && (!selectedOnly || selectedIds.has(node.layer.id))

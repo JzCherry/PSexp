@@ -26,16 +26,21 @@ function probeDocumentInfo() {
 
         var abCount = 0;
         try {
+            var propId = charIDToTypeID('Prpr');
+            var numLayersId = stringIDToTypeID('numberOfLayers');
+            var abEnabledId = stringIDToTypeID('artboardEnabled');
+            var lyrId = charIDToTypeID('Lyr ');
             var docRef = new ActionReference();
+            docRef.putProperty(propId, numLayersId);
             docRef.putEnumerated(charIDToTypeID('Dcmn'), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
             var appDesc = executeActionGet(docRef);
-            var numOfLayers = appDesc.getInteger(stringIDToTypeID('numberOfLayers'));
+            var numOfLayers = appDesc.getInteger(numLayersId);
             for (var i = 1; i <= numOfLayers; i++) {
                 var layerRef = new ActionReference();
-                layerRef.putIndex(charIDToTypeID('Lyr '), i);
+                layerRef.putProperty(propId, abEnabledId);
+                layerRef.putIndex(lyrId, i);
                 var layerDesc = executeActionGet(layerRef);
-                if (layerDesc.hasKey(stringIDToTypeID('artboardEnabled')) &&
-                    layerDesc.getBoolean(stringIDToTypeID('artboardEnabled'))) {
+                if (layerDesc.hasKey(abEnabledId) && layerDesc.getBoolean(abEnabledId)) {
                     abCount++;
                 }
             }
@@ -46,15 +51,18 @@ function probeDocumentInfo() {
         // 只把实际存在的原生用户切片/基于图层的切片作为切片目标。
         var hasSlices = false;
         try {
+            var slicesId = stringIDToTypeID('slices');
+            var originId = stringIDToTypeID('origin');
+            var typeId = stringIDToTypeID('type');
             var sliceRef = new ActionReference();
-            sliceRef.putProperty(stringIDToTypeID('property'), stringIDToTypeID('slices'));
+            sliceRef.putProperty(stringIDToTypeID('property'), slicesId);
             sliceRef.putEnumerated(stringIDToTypeID('document'), stringIDToTypeID('ordinal'), stringIDToTypeID('targetEnum'));
-            var sliceRoot = executeActionGet(sliceRef).getObjectValue(stringIDToTypeID('slices'));
-            var sliceList = sliceRoot.getList(stringIDToTypeID('slices'));
+            var sliceRoot = executeActionGet(sliceRef).getObjectValue(slicesId);
+            var sliceList = sliceRoot.getList(slicesId);
             for (var si = 0; si < sliceList.count; si++) {
                 var slice = sliceList.getObjectValue(si);
-                var origin = typeIDToStringID(slice.getEnumerationValue(stringIDToTypeID('origin')));
-                var sliceType = typeIDToStringID(slice.getEnumerationValue(stringIDToTypeID('type')));
+                var origin = typeIDToStringID(slice.getEnumerationValue(originId));
+                var sliceType = typeIDToStringID(slice.getEnumerationValue(typeId));
                 if ((origin === 'userGenerated' || origin === 'layerGenerated') && sliceType === 'image') {
                     hasSlices = true;
                     break;

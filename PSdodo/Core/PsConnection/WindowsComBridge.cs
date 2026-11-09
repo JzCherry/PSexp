@@ -53,7 +53,17 @@ public sealed class WindowsComBridge : IPsBridge
             }
 
             var retStr = returnValue?.ToString() ?? string.Empty;
-            var logs = connectionLogs.Concat(ReadLogs(logFilePath)).ToArray();
+            var inlineLogs = Array.Empty<PsLogEntry>();
+            const string logSeparator = "\n__PSX_LOGS__\n";
+            var sepIdx = retStr.IndexOf(logSeparator, StringComparison.Ordinal);
+            if (sepIdx >= 0)
+            {
+                var logPart = retStr[(sepIdx + logSeparator.Length)..];
+                retStr = retStr[..sepIdx];
+                if (!string.IsNullOrEmpty(logPart))
+                    inlineLogs = logPart.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(PsLogEntry.Parse).ToArray();
+            }
+            var logs = connectionLogs.Concat(inlineLogs).Concat(ReadLogs(logFilePath)).ToArray();
             var hasScriptResult = TryReadScriptResult(
                 retStr,
                 out var scriptSucceeded,
@@ -93,7 +103,7 @@ public sealed class WindowsComBridge : IPsBridge
         }
     }
 
-    /// <summary>包装用户脚本：去掉 #target 指令、捕获 $.writeln 到日志文件、统一返回值</summary>
+    /// <summary>包装用户脚本：去掉 #target 指令、捕获 $.writeln 到内存或日志文件、统一返回值</summary>
     /// <remarks>
     /// 约定：脚本末尾应为 <c>__psx_result = &lt;value&gt;;</c> 形式（探针/导出脚本都已遵循）。
     /// 包装器只负责定义 __psx_result、劫持 $.writeln、try/catch 兜底。
@@ -117,9 +127,14 @@ public sealed class WindowsComBridge : IPsBridge
         {
             return
                 "var __psx_result = '';\n" +
+                "var __psx_logs = [];\n" +
+                "$.writeln = function(s) { __psx_logs.push(String(s)); };\n" +
                 "try {\n" + cleaned + "\n}\n" +
-                "catch(__e) { __psx_result = ''; }\n" +
-                "__psx_result;";
+                "catch(__e) {\n" +
+                "    __psx_logs.push(\"PSX_LOG|error|wrapper: \" + __e);\n" +
+                "    __psx_result = '';\n" +
+                "}\n" +
+                "__psx_result + \"\\n__PSX_LOGS__\\n\" + __psx_logs.join(\"\\n\");";
         }
 
         var logEscaped = ScriptParameterInjector.EscapeJsString(logFilePath);

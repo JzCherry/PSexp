@@ -36,8 +36,8 @@ public static class ExportFileWatcher
 {
     public const int DefaultTimeoutMs = 120_000;
     public const int FirstChangeTimeoutMs = 30_000;
-    public const int PollIntervalMs = 250;
-    public const int StablePeriodMs = 2_000;
+    public const int PollIntervalMs = 40;
+    public const int StablePeriodMs = 320;
 
     public static ExportDirectorySnapshot CaptureSnapshot(string exportPath, string extension)
         => new(ReadSnapshot(exportPath, extension));
@@ -89,6 +89,8 @@ public static class ExportFileWatcher
                 onProgress?.Invoke(Path.GetFileName(path), reported.Count);
             }
 
+            if (requireCompletedImages && expectedFileCount is > 0 && changed.Count >= expectedFileCount.Value)
+                return new ExportFileChangeResult { Files = changed.Keys.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray() };
             if (SnapshotsEqual(lastChanged, changed))
             {
                 stableMs += PollIntervalMs;

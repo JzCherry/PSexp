@@ -3,7 +3,6 @@ const fs = require("uxp").storage.localFileSystem;
 const folder = await fs.getEntryWithUrl("{{RESULT_FOLDER_URL}}");
 const receipt = await folder.createFile("result.json", { overwrite: true });
 const state = { done: false, success: false, error: "" };
-await receipt.write(JSON.stringify(state));
 try {
     await core.executeAsModal(async () => {
         const doc = Array.from(app.documents).find(item => item.id === {{DOCUMENT_ID}});

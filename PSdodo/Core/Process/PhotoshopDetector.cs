@@ -17,6 +17,7 @@ namespace PsExporter.Core.Process;
 public sealed class PhotoshopDetector : IPhotoshopDetector
 {
     private const string WinProcName = "Photoshop";
+    private static (int ProcessId, string ExecutablePath, string Version) _cachedWinProcess;
 
     public PhotoshopProcessInfo Detect()
     {
@@ -69,10 +70,22 @@ public sealed class PhotoshopDetector : IPhotoshopDetector
         try
         {
             var process = procs[0];
+            var cached = _cachedWinProcess;
+            if (cached.ProcessId == process.Id && !string.IsNullOrEmpty(cached.ExecutablePath))
+            {
+                return new PhotoshopProcessInfo
+                {
+                    IsRunning = true,
+                    ProcessId = process.Id,
+                    ExecutablePath = cached.ExecutablePath,
+                    Version = cached.Version
+                };
+            }
             var path = TryGetWindowsPath(process);
             var version = TryGetProcessVersion(process);
             if (string.IsNullOrWhiteSpace(version))
                 version = TryGetWindowsVersion();
+            _cachedWinProcess = (process.Id, path, version);
 
             return new PhotoshopProcessInfo
             {

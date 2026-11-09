@@ -41,7 +41,6 @@ async function exportSlices(context) {
     stage = "读取切片输出目录";
     activePath = exportFolderUrl;
     const folder = await fs.getEntryWithUrl(exportFolderUrl);
-    await report();
     if (context.isCancelled) throw new Error("Photoshop 已取消切片导出");
     let copy;
     let autoCloseRegistered = false;
@@ -60,7 +59,6 @@ async function exportSlices(context) {
         const canvasHeight = copy.height;
         state.temporaryDocumentId = copy.id;
         state.reusesTemporaryDocument = true;
-        await report();
         for (let index = 0; index < slices.length; index++) {
             if (context.isCancelled) throw new Error("Photoshop 已取消切片导出");
             const slice = slices[index];
@@ -139,7 +137,6 @@ async function exportSlices(context) {
 try {
     const resultFolder = await fs.getEntryWithUrl(resultFolderUrl);
     resultFile = await resultFolder.createFile("result.json", { overwrite: true });
-    await report();
     await core.executeAsModal(exportSlices, { commandName: "Export Native Slices" });
     state.success = true;
 } catch (error) {

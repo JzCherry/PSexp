@@ -63,7 +63,7 @@ async function exportAssets(context, source, sourceNodes, targets, saveTarget) {
                     const id = node.layer.id;
                     const visible = id === targetNode.layer.id || targetNode.parents.includes(id) ||
                         (node.parents.includes(targetNode.layer.id) && visibility.get(id));
-                    if (node.layer.visible !== visible) node.layer.visible = visible;
+                    if (visibility.get(id) !== visible) node.layer.visible = visible;
                 }
 
                 stage = "裁去素材周围透明区域";
@@ -108,8 +108,9 @@ async function exportBatch(executionContext) {
     try { state.sourceDocument.path = String(doc.path || ""); } catch (_) { /* unsaved */ }
     const { nodes, targets, warning } = resolveLayerExportTargets(doc, !recursive, selectedOnly);
     state.warning = warning;
-    const layers = nodes.map(node => node.layer);
+    const layers = (recursive ? nodes : nodes.filter(node => node.parents.length === 0)).map(node => node.layer);
     const visibility = new Map(layers.map(layer => [layer.id, layer.visible]));
+    const nodeById = new Map(nodes.map(item => [item.layer.id, item]));
     stage = "读取导出目录";
     activePath = exportFolderUrl;
     const folder = await fs.getEntryWithUrl(exportFolderUrl);
@@ -125,10 +126,8 @@ async function exportBatch(executionContext) {
         }
         stage = "创建导出文件";
         activePath = exportFolderUrl + "/" + name;
-        await report();
         const entry = await folder.createFile(name, { overwrite: !rename });
         stage = "保存 " + format.toUpperCase() + " 副本";
-        await report();
         if (format === "png") await document.saveAs.png(entry, {}, true);
         else if (format === "jpg") await document.saveAs.jpg(entry, { quality: Math.round(12 * quality / 100) }, true);
         else throw new Error("不支持的导出格式: " + format);
@@ -145,19 +144,24 @@ async function exportBatch(executionContext) {
         return;
     }
 
+    const reversedLayers = [...layers].reverse();
+    const currentVisible = new Map(visibility);
     let failure;
     try {
         for (const target of targets) {
             if (executionContext.isCancelled) throw new Error("Photoshop 已取消导出");
             stage = "切换图层可见性";
             activePath = target.name;
-            for (const layer of [...layers].reverse()) {
+            const targetNode = nodeById.get(target.id);
+            for (const layer of reversedLayers) {
                 // 画布合成保留背景与排除分支的原显示状态。
-                const node = nodes.find(item => item.layer.id === layer.id);
-                const targetNode = nodes.find(item => item.layer.id === target.id);
+                const node = nodeById.get(layer.id);
                 const visible = layer.id === target.id || targetNode.parents.includes(layer.id) ||
                     ((node.blocked || layer.isBackgroundLayer || node.parents.includes(target.id)) && visibility.get(layer.id));
-                if (layer.visible !== visible) layer.visible = visible;
+                if (currentVisible.get(layer.id) !== visible) {
+                    layer.visible = visible;
+                    currentVisible.set(layer.id, visible);
+                }
             }
             await saveTarget(doc, target);
         }
@@ -166,9 +170,9 @@ async function exportBatch(executionContext) {
     } finally {
         // 尽力恢复每一个图层，一层失败不能阻止其他图层恢复。
         const restoreErrors = [];
-        for (const layer of [...layers].reverse()) {
+        for (const layer of reversedLayers) {
             try {
-                if (layer.visible !== visibility.get(layer.id)) layer.visible = visibility.get(layer.id);
+                if (currentVisible.get(layer.id) !== visibility.get(layer.id)) layer.visible = visibility.get(layer.id);
             } catch (error) { restoreErrors.push(layer.name + ": " + String(error)); }
         }
         if (restoreErrors.length) {
@@ -181,7 +185,6 @@ async function exportBatch(executionContext) {
 try {
     const resultFolder = await fs.getEntryWithUrl(resultFolderUrl);
     resultFile = await resultFolder.createFile("result.json", { overwrite: true });
-    await report();
     stage = "检查文档与导出目标";
     activePath = exportFolderUrl;
     await core.executeAsModal(exportBatch, { commandName: recursive ? "Export All Layers" : "Export Top-level Layers" });

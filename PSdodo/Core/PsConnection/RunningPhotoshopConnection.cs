@@ -12,13 +12,17 @@ internal static class RunningPhotoshopConnection
     private static readonly Lazy<Registration[]> Registrations = new(ReadRegistrations);
     // Photoshop's _Application automation interface (also registered by the installed Photoshop type library).
     private static readonly Guid ApplicationInterfaceId = new("5DE90358-4D0B-4FA1-BA3E-C91BBA863F32");
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> ProcessPathCache = new();
+    private static (Guid ClassId, string ServerPath) _verifiedRegistration;
+    private static readonly int CurrentSessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId;
 
     public static object Attach(out string description)
     {
         var runningPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var runningIds = new HashSet<int>();
-        using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
-        var sessionId = currentProcess.SessionId;
+        var sessionId = CurrentSessionId;
+
+
         var processes = System.Diagnostics.Process.GetProcessesByName("Photoshop");
         try
         {
@@ -28,7 +32,12 @@ internal static class RunningPhotoshopConnection
                 {
                     if (process.SessionId != sessionId) continue;
                     runningIds.Add(process.Id);
-                    if (process.MainModule?.FileName is { } path) runningPaths.Add(path);
+                    if (!ProcessPathCache.TryGetValue(process.Id, out var path))
+                    {
+                        path = process.MainModule?.FileName ?? "";
+                        if (!string.IsNullOrEmpty(path)) ProcessPathCache[process.Id] = path;
+                    }
+                    if (!string.IsNullOrEmpty(path)) runningPaths.Add(path);
                 }
                 catch { /* Access restrictions must not turn process detection into 'no document'. */ }
         }
@@ -48,8 +57,9 @@ internal static class RunningPhotoshopConnection
             if (!tried.Add(candidate.ClassId)) continue;
             var classId = candidate.ClassId;
             var result = GetActiveObject(ref classId, IntPtr.Zero, out var application);
-            if (result >= 0 && application is not null && MatchesRunningInstallation(application, runningPaths))
+            if (result >= 0 && application is not null && ((candidate.ClassId, candidate.ServerPath) == _verifiedRegistration && runningPaths.Contains(candidate.ServerPath) || MatchesRunningInstallation(application, runningPaths)))
             {
+                _verifiedRegistration = (candidate.ClassId, candidate.ServerPath);
                 description = $"连接已运行实例：{candidate.ProgId}；CLSID={classId}；server={candidate.ServerPath}";
                 return application;
             }

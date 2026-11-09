@@ -31,7 +31,8 @@ public sealed partial class PhotoshopService
         {
             ct.ThrowIfCancellationRequested();
             string? raw = null;
-            try { raw = await File.ReadAllTextAsync(Path.Combine(taskDirectory, "document.json"), ct); }
+            var receiptPath = Path.Combine(taskDirectory, "document.json");
+            try { if (File.Exists(receiptPath)) raw = await File.ReadAllTextAsync(receiptPath, ct); }
             catch (IOException) { }
             if (raw is not null)
             {
@@ -66,7 +67,7 @@ public sealed partial class PhotoshopService
                     }
                 }
             }
-            await Task.Delay(150, ct);
+            await Task.Delay(20, ct);
         }
         return (PsDocumentInfo.Empty, PsBridgeResult.Failed(new TimeoutException(
             "UXP 文档识别未收到完成回执，请检查 .psjs 关联及 Photoshop 状态。诊断已保留：" + taskDirectory)));

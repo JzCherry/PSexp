@@ -9,7 +9,6 @@ const taskFs = require("uxp").storage.localFileSystem;
 const taskState = { done: false, success: false, files: [], error: "" };
 const taskFolder = await taskFs.getEntryWithUrl("{{RESULT_FOLDER_URL}}");
 const taskFile = await taskFolder.createFile("result.json", { overwrite: true });
-await taskFile.write(JSON.stringify(taskState));
 try {
     taskState.stage = "执行 Photoshop 导出";
     taskState.path = "{{EXPORT_FOLDER_URL}}";

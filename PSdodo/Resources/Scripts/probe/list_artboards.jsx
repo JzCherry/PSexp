@@ -13,11 +13,19 @@ function listArtboards() {
     var result = [];
     try {
         if (app.documents.length === 0) { return '[]'; }
+        var propId = charIDToTypeID('Prpr');
+        var abEnabledId = stringIDToTypeID('artboardEnabled');
         var docRef = new ActionReference();
+        docRef.putProperty(propId, stringIDToTypeID('numberOfLayers'));
         docRef.putEnumerated(charIDToTypeID('Dcmn'), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
         var appDesc = executeActionGet(docRef);
         var numOfLayers = appDesc.getInteger(stringIDToTypeID('numberOfLayers'));
         for (var i = 1; i <= numOfLayers; i++) {
+            var abRef = new ActionReference();
+            abRef.putProperty(propId, abEnabledId);
+            abRef.putIndex(charIDToTypeID('Lyr '), i);
+            var abDesc = executeActionGet(abRef);
+            if (!abDesc.hasKey(abEnabledId) || !abDesc.getBoolean(abEnabledId)) continue;
             var layerRef = new ActionReference();
             layerRef.putIndex(charIDToTypeID('Lyr '), i);
             var layerDesc = executeActionGet(layerRef);

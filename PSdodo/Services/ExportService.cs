@@ -15,11 +15,13 @@ public sealed class ExportService : IExportService
 {
     private readonly UxpScriptBridge _uxpBridge;
     private readonly FileLogger _logger;
+    private readonly IPsBridge? _comBridge;
 
-    public ExportService(UxpScriptBridge uxpBridge, FileLogger? logger = null)
+    public ExportService(UxpScriptBridge uxpBridge, FileLogger? logger = null, IPsBridge? comBridge = null)
     {
         _uxpBridge = uxpBridge;
         _logger = logger ?? new FileLogger();
+        _comBridge = comBridge;
     }
 
     // 三个快速导出走 UXP（.psjs 文件关联触发，支持 batchPlay + executeAsModal）
@@ -188,6 +190,34 @@ public sealed class ExportService : IExportService
 
     public async Task<PsBridgeResult> SaveAndCloseDocumentAsync(int documentId, string documentPath)
     {
+        if (_comBridge is { IsAvailable: true })
+        {
+            var escapedPath = ScriptParameterInjector.EscapeJsString(documentPath);
+            var idStr = documentId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var comScript =
+                "__psx_result = (function() {\n" +
+                "    var target = null;\n" +
+                "    for (var i = 0; i < app.documents.length; i++) {\n" +
+                "        if (app.documents[i].id === " + idStr + ") { target = app.documents[i]; break; }\n" +
+                "    }\n" +
+                "    if (!target) return '{\"success\":false,\"error\":\"原导出文档已不在 Photoshop 中\"}';\n" +
+                "    var curPath = '';\n" +
+                "    try { curPath = target.fullName ? target.fullName.fsName : ''; } catch (e) {}\n" +
+                "    var expectedPath = new File(\"" + escapedPath + "\").fsName;\n" +
+                "    if (curPath.toLowerCase() !== expectedPath.toLowerCase() && curPath.toLowerCase() !== \"" + escapedPath + "\".toLowerCase())\n" +
+                "        return '{\"success\":false,\"error\":\"原导出文档的保存路径已变化\"}';\n" +
+                "    target.close(SaveOptions.SAVECHANGES);\n" +
+                "    for (var j = 0; j < app.documents.length; j++) {\n" +
+                "        if (app.documents[j].id === " + idStr + ") return '{\"success\":false,\"error\":\"Photoshop 未确认关闭文档\"}';\n" +
+                "    }\n" +
+                "    return '{\"success\":true,\"count\":1}';\n" +
+                "})();";
+            var comResult = await _comBridge.ExecuteAsync(comScript, null, CancellationToken.None);
+            if (comResult.Success || comResult.Error?.Message is "原导出文档已不在 Photoshop 中" or "原导出文档的保存路径已变化")
+                return comResult;
+            _logger.Warn("COM 保存并关闭原文档未完成，回退 UXP：" + comResult.Error?.Message);
+        }
+
         var directory = Path.Combine(Path.GetTempPath(), "PSexp", "tasks", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var script = ScriptParameterInjector.Inject(ScriptLibrary.GetScript("export/save_and_close"), new Dictionary<string, string>
@@ -274,7 +304,7 @@ public sealed class ExportService : IExportService
             // Only names that can collide with this format are needed for automatic suffixes.
             var extension = "." + s.Format.ToExtension();
             args["EXISTING_EXPORT_NAMES"] = s.AutoRename
-                ? System.Text.Json.JsonSerializer.Serialize(Directory.EnumerateFileSystemEntries(s.ExportPath)
+                ? System.Text.Json.JsonSerializer.Serialize(Directory.EnumerateFiles(s.ExportPath, "*" + extension)
                     .Where(path => string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase))
                     .Select(Path.GetFileName))
                 : "[]";

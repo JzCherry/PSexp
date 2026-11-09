@@ -22,12 +22,16 @@ function exportAllArtboards() {
         // 会把整个文档当成一张图导出，跟"全部画板"语义不符
         var abCount = 0;
         try {
+            var propId = charIDToTypeID('Prpr');
+            var abEnabledId = stringIDToTypeID('artboardEnabled');
             var docRef = new ActionReference();
+            docRef.putProperty(propId, stringIDToTypeID('numberOfLayers'));
             docRef.putEnumerated(charIDToTypeID('Dcmn'), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
             var appDesc = executeActionGet(docRef);
             var numOfLayers = appDesc.getInteger(stringIDToTypeID('numberOfLayers'));
             for (var i = 1; i <= numOfLayers; i++) {
                 var layerRef = new ActionReference();
+                layerRef.putProperty(propId, abEnabledId);
                 layerRef.putIndex(charIDToTypeID('Lyr '), i);
                 var layerDesc = executeActionGet(layerRef);
                 if (layerDesc.hasKey(stringIDToTypeID('artboardEnabled')) &&
