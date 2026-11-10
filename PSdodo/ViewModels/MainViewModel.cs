@@ -221,10 +221,13 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(DocumentNamePrefixHint))]
     [NotifyPropertyChangedFor(nameof(ImageNamePlaceholder))]
     [NotifyPropertyChangedFor(nameof(ImageNameHint))]
+    [NotifyPropertyChangedFor(nameof(ShowDocumentNameBadge))]
     private bool _useDocumentNameAsFallbackPrefix;
 
     public string DocumentNamePrefixHint => (UseDocumentNameAsFallbackPrefix ? "文档名已开启。" : "文档名已关闭。")
         + "开启后，文件前缀留空时使用不含扩展名的 Photoshop 文档名。填写了文件前缀时，优先使用填写的内容。";
+
+    public bool ShowDocumentNameBadge => IsFilePrefixMode && UseDocumentNameAsFallbackPrefix;
 
     [ObservableProperty]
     private string _fileName = string.Empty;
@@ -259,6 +262,8 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsLayerSelectionSelectedOnly));
         OnPropertyChanged(nameof(LayerModeHint));
         OnPropertyChanged(nameof(CurrentModeHint));
+        OnPropertyChanged(nameof(ExportScopeBadgeText));
+        OnPropertyChanged(nameof(ExportScopeHint));
     }
     partial void OnLayerExportSelectedOnlyChanged(bool value)
     {
@@ -336,6 +341,24 @@ public partial class MainViewModel : ViewModelBase
         ExportMode.SelectedArtboards => HasArtboards ? "导出 Photoshop 当前选中的画板" : "当前文档没有画板",
         ExportMode.Layers => LayerModeHint,
         ExportMode.Slices => HasSlices ? "按 Photoshop 原生用户切片范围导出图片" : "当前文档没有可用切片",
+        _ => string.Empty
+    };
+
+    public bool HasExportScopeBadge => IsArtboardMode || IsLayerMode;
+
+    public string ExportScopeBadgeText => SelectedMode switch
+    {
+        ExportMode.AllArtboards => "全部画板",
+        ExportMode.SelectedArtboards => "当前选中",
+        ExportMode.Layers => LayerExportSelectedOnly ? "选中" : "全部",
+        _ => string.Empty
+    };
+
+    public string ExportScopeHint => SelectedMode switch
+    {
+        ExportMode.AllArtboards => "导出范围：全部画板",
+        ExportMode.SelectedArtboards => "导出范围：当前选中的画板",
+        ExportMode.Layers => LayerExportSelectedOnly ? "导出范围：选中的图层或组" : "导出范围：全部图层或组",
         _ => string.Empty
     };
 
@@ -450,6 +473,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowLayerSelection));
         OnPropertyChanged(nameof(IsImageNameVisible));
         OnPropertyChanged(nameof(IsFilePrefixMode));
+        OnPropertyChanged(nameof(ShowDocumentNameBadge));
         OnPropertyChanged(nameof(ImageNameLabel));
         OnPropertyChanged(nameof(ImageNamePlaceholder));
         OnPropertyChanged(nameof(ImageNameHint));
@@ -457,6 +481,9 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(CurrentModeTitle));
         OnPropertyChanged(nameof(CurrentExportHighlight));
         OnPropertyChanged(nameof(CurrentModeHint));
+        OnPropertyChanged(nameof(HasExportScopeBadge));
+        OnPropertyChanged(nameof(ExportScopeBadgeText));
+        OnPropertyChanged(nameof(ExportScopeHint));
         OnPropertyChanged(nameof(ReadinessText));
         RefreshCanExecute();
     }
@@ -681,7 +708,10 @@ public partial class MainViewModel : ViewModelBase
     private void RefreshCanExecute()
     {
         ToggleAutoRenameCommand.NotifyCanExecuteChanged();
+        SetAutoRenameCommand.NotifyCanExecuteChanged();
         ToggleDocumentNamePrefixCommand.NotifyCanExecuteChanged();
+        ToggleSaveAndCloseAfterExportCommand.NotifyCanExecuteChanged();
+        SetSaveAndCloseAfterExportCommand.NotifyCanExecuteChanged();
         StartExportCommand.NotifyCanExecuteChanged();
         CancelExportCommand.NotifyCanExecuteChanged();
         RefreshStatusCommand.NotifyCanExecuteChanged();
@@ -1201,6 +1231,9 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand(CanExecute = nameof(CanChangeMode))]
     private void ToggleAutoRename() => AutoRename = !AutoRename;
+
+    [RelayCommand(CanExecute = nameof(CanChangeMode))]
+    private void SetAutoRename(object? value) => AutoRename = ParseBooleanCommandParameter(value);
 
     [RelayCommand(CanExecute = nameof(CanChangeMode))]
     private void ToggleDocumentNamePrefix() => UseDocumentNameAsFallbackPrefix = !UseDocumentNameAsFallbackPrefix;

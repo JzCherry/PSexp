@@ -365,39 +365,54 @@
                                                         Classes="output-meta" Orientation="Horizontal" Height="{StaticResource Control.BadgeHeight}"
                                                         Spacing="6"
                                                         VerticalAlignment="Center">
-                                                <Button Classes="compact-action" Classes.active="{Binding UseDocumentNameAsFallbackPrefix}"
-                                                    IsVisible="{Binding IsFilePrefixMode}" Command="{Binding ToggleDocumentNamePrefixCommand}"
-                                                    ToolTip.Tip="{Binding DocumentNamePrefixHint}" AutomationProperties.Name="文档名"
-                                                    AutomationProperties.HelpText="{Binding DocumentNamePrefixHint}">
-                                                    <TextBlock Text="文档名" VerticalAlignment="Center"/>
-                                                </Button>
-                                                <Button Classes="compact-action" Classes.active="{Binding AutoRename}"
-                                                    Command="{Binding ToggleAutoRenameCommand}" ToolTip.Tip="{Binding AutoRenameHint}"
-                                                    AutomationProperties.Name="同名重命名" AutomationProperties.HelpText="{Binding AutoRenameHint}">
-                                                    <TextBlock Text="重命名" VerticalAlignment="Center"/>
-                                                </Button>
-                                                <Button Classes="compact-action" Classes.active="{Binding SaveAndCloseAfterExport}"
-                                                    Command="{Binding ToggleSaveAndCloseAfterExportCommand}" ToolTip.Tip="{Binding SaveAndCloseHint}"
-                                                    IsEnabled="{Binding CanChangeMode}"
-                                                    AutomationProperties.Name="导出后保存并关闭文档" AutomationProperties.HelpText="{Binding SaveAndCloseHint}">
-                                                    <TextBlock Text="保存并关闭" VerticalAlignment="Center"/>
-                                                </Button>
                                                 <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
                                                         BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
                                                         BorderThickness="1"
-                                                        IsVisible="{Binding IsJpgFormat}" Classes="meta-badge">
-                                                    <TextBlock Text="JPG"
+                                                        IsVisible="{Binding HasExportScopeBadge}" Classes="meta-badge"
+                                                        ToolTip.Tip="{Binding ExportScopeHint}">
+                                                    <TextBlock Text="{Binding ExportScopeBadgeText}"
                                                                Classes="micro meta-label"
                                                                Foreground="{DynamicResource Brush.Accent}"
                                                                FontWeight="SemiBold"/>
                                                 </controls:ContinuousBorder>
-                                                <controls:ContinuousBorder Background="{StaticResource Brush.Surface}"
-                                                        BorderBrush="{StaticResource Brush.Border}"
+                                                <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
+                                                        BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
                                                         BorderThickness="1"
-                                                        IsVisible="{Binding !IsJpgFormat}" Classes="meta-badge">
-                                                    <TextBlock Text="PNG"
+                                                        IsVisible="{Binding ShowDocumentNameBadge}" Classes="meta-badge"
+                                                        ToolTip.Tip="{Binding DocumentNamePrefixHint}">
+                                                    <TextBlock Text="文档名"
                                                                Classes="micro meta-label"
-                                                               Foreground="{StaticResource Brush.TextSecondary}"
+                                                               Foreground="{DynamicResource Brush.Accent}"
+                                                               FontWeight="SemiBold"/>
+                                                </controls:ContinuousBorder>
+                                                <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
+                                                        BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
+                                                        BorderThickness="1"
+                                                        IsVisible="{Binding AutoRename}" Classes="meta-badge"
+                                                        ToolTip.Tip="{Binding AutoRenameHint}">
+                                                    <TextBlock Text="重命名"
+                                                               Classes="micro meta-label"
+                                                               Foreground="{DynamicResource Brush.Accent}"
+                                                               FontWeight="SemiBold"/>
+                                                </controls:ContinuousBorder>
+                                                <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
+                                                        BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
+                                                        BorderThickness="1"
+                                                        IsVisible="{Binding !AutoRename}" Classes="meta-badge"
+                                                        ToolTip.Tip="{Binding AutoRenameHint}">
+                                                    <TextBlock Text="覆盖"
+                                                               Classes="micro meta-label"
+                                                               Foreground="{DynamicResource Brush.Accent}"
+                                                               FontWeight="SemiBold"/>
+                                                </controls:ContinuousBorder>
+                                                <controls:ContinuousBorder Background="{DynamicResource Brush.SegmentHover}"
+                                                        BorderBrush="{DynamicResource Brush.SegmentSelectedBorder}"
+                                                        BorderThickness="1"
+                                                        IsVisible="{Binding SaveAndCloseAfterExport}" Classes="meta-badge"
+                                                        ToolTip.Tip="{Binding SaveAndCloseHint}">
+                                                    <TextBlock Text="保存并关闭"
+                                                               Classes="micro meta-label"
+                                                               Foreground="{DynamicResource Brush.Accent}"
                                                                FontWeight="SemiBold"/>
                                                 </controls:ContinuousBorder>
                                             </StackPanel>
@@ -802,12 +817,75 @@
                                                       VerticalAlignment="Center"
                                                       IsVisible="{Binding IsImageNameVisible}">
                                                     <TextBlock Grid.Column="0" Text="{Binding ImageNameLabel}" Classes="label"/>
-                                                    <controls:ContinuousBorder Grid.Column="1"  Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"><TextBox Background="Transparent" BorderThickness="0"
-                                                             Text="{Binding ImageName}" ToolTip.Tip="{Binding ImageNameHint}" AutomationProperties.Name="{Binding ImageNameLabel}"
-                                                             PlaceholderText="{Binding ImageNamePlaceholder}"
-                                                             VerticalContentAlignment="Center"
-                                                             Padding="10,0"/></controls:ContinuousBorder>
+                                                    <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                        <controls:ContinuousBorder Classes="input-shell" Height="{StaticResource Control.InputHeight}" CornerRadius="{StaticResource Radius.Sm}" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                                                            <TextBox Background="Transparent" BorderThickness="0"
+                                                                      Text="{Binding ImageName}" ToolTip.Tip="{Binding ImageNameHint}" AutomationProperties.Name="{Binding ImageNameLabel}"
+                                                                      PlaceholderText="{Binding ImageNamePlaceholder}"
+                                                                      VerticalContentAlignment="Center"
+                                                                      Padding="10,0"/>
+                                                        </controls:ContinuousBorder>
+                                                        <Button Grid.Column="1" Classes="compact-action"
+                                                                Height="{StaticResource Control.InputHeight}"
+                                                                MinHeight="{StaticResource Control.InputHeight}"
+                                                                MaxHeight="{StaticResource Control.InputHeight}"
+                                                                CornerRadius="{StaticResource Radius.Sm}"
+                                                                Classes.active="{Binding UseDocumentNameAsFallbackPrefix}"
+                                                                IsVisible="{Binding IsFilePrefixMode}"
+                                                                Command="{Binding ToggleDocumentNamePrefixCommand}"
+                                                                ToolTip.Tip="{Binding DocumentNamePrefixHint}"
+                                                                AutomationProperties.Name="使用文档名前缀"
+                                                                AutomationProperties.HelpText="{Binding DocumentNamePrefixHint}">
+                                                            <TextBlock Text="文档名" VerticalAlignment="Center"/>
+                                                        </Button>
+                                                    </Grid>
                                                 </Grid>
+
+                                                <!-- 同名文件处理：重命名 vs 覆盖 -->
+                                                <controls:SegmentOptionRow Spacing="12" VerticalAlignment="Center">
+                                                    <TextBlock Text="同名文件" Classes="label" ToolTip.Tip="输出目录中已存在同名图片时的处理方式"/>
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding AutoRename}" IsEnabled="{Binding CanChangeMode}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetAutoRenameCommand}" CommandParameter="True"
+                                                                ToolTip.Tip="同名时自动追加序号（如 _1），保留已有文件">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="重命名" Classes="mode-label"
+                                                                        Foreground="{Binding AutoRename, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SetAutoRenameCommand}" CommandParameter="False"
+                                                                ToolTip.Tip="同名时直接覆盖已有文件">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="覆盖" Classes="mode-label"
+                                                                        Foreground="{Binding AutoRename, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </controls:SegmentOptionRow>
+
+                                                <!-- 导出完成时是否保存并关闭原文档：禁用 vs 启用 -->
+                                                <controls:SegmentOptionRow Spacing="12" VerticalAlignment="Center">
+                                                    <TextBlock Text="保存关闭" Classes="label" ToolTip.Tip="导出完成后，是否保存并关闭 Photoshop 原文档"/>
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding SaveAndCloseAfterExport}" IsEnabled="{Binding CanChangeMode}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetSaveAndCloseAfterExportCommand}" CommandParameter="False"
+                                                                ToolTip.Tip="导出后保留 Photoshop 原文档打开状态">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="禁用" Classes="mode-label"
+                                                                        Foreground="{Binding SaveAndCloseAfterExport, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=False}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SetSaveAndCloseAfterExportCommand}" CommandParameter="True"
+                                                                ToolTip.Tip="{Binding SaveAndCloseHint}">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="启用" Classes="mode-label"
+                                                                        Foreground="{Binding SaveAndCloseAfterExport, Converter={x:Static vm:EqualsToTextBrushConverter.Instance}, ConverterParameter=True}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </controls:SegmentOptionRow>
                                             </StackPanel>
 
                                         </StackPanel>

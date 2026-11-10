@@ -17,10 +17,16 @@ public partial class MainViewModel
 
     partial void OnSaveAndCloseAfterExportChanged(bool value) => SaveBehaviorSettings();
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeMode))]
     private void ToggleSaveAndCloseAfterExport()
     {
-        if (!IsBusy) SaveAndCloseAfterExport = !SaveAndCloseAfterExport;
+        if (CanChangeMode) SaveAndCloseAfterExport = !SaveAndCloseAfterExport;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanChangeMode))]
+    private void SetSaveAndCloseAfterExport(object? value)
+    {
+        if (CanChangeMode) SaveAndCloseAfterExport = ParseBooleanCommandParameter(value);
     }
 
     private async Task SaveAndCloseExportedDocumentAsync(string receipt, int processId)
