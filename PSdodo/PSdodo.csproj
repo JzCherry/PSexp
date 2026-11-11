@@ -11,7 +11,7 @@
     <ApplicationIcon>Assets\ico.ico</ApplicationIcon>
     <AssemblyName>PSexpV3</AssemblyName>
     <RootNamespace>PsExporter</RootNamespace>
-    <Version>3.0.14</Version>
+    <Version>3.0.15</Version>
     <AssemblyTitle>PSexp v$(Version)</AssemblyTitle>
     <Product>PSexp v$(Version)</Product>
     <!-- 默认单文件只捆绑应用依赖，不捆绑 .NET；运行需要 .NET 10 x64 Runtime。 -->
