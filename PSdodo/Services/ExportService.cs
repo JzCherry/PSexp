@@ -249,16 +249,85 @@ public sealed class ExportService : IExportService
         return string.IsNullOrEmpty(name) ? settings.ExportPath : Path.Combine(settings.ExportPath, name);
     }
 
+    private static bool IsUncPath(string? path)
+        => !string.IsNullOrWhiteSpace(path) && (path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal));
+
     private async Task<PsBridgeResult> ExportLayerBatchAsync(
         ExportSettings s, bool sliceMode, ExportProgressHandler? onProgress, CancellationToken ct)
     {
-        var args = BuildCommonArgs(s);
-        args["QUALITY"] = s.Quality.ToString();
-        args["FILE_NAME"] = ScriptParameterInjector.EscapeJsString(s.FileName);
-        args["SLICE_MODE"] = sliceMode ? "true" : "false";
-        args["RECURSIVE"] = s.LayerExportRecursive ? "true" : "false";
-        args["SELECTED_ONLY"] = (s.LayerExportRecursive ? s.LayerExportSelectedOnly : s.LayerTopLevelSelectedOnly) ? "true" : "false";
-        return await ExecuteReceiptTaskAsync(ScriptLibrary.GetScript(sliceMode ? ScriptNames.ExportSlices : ScriptNames.ExportLayerBatch), args, s, onProgress, ct);
+        var isUnc = IsUncPath(s.ExportPath);
+        if (!isUnc)
+        {
+            var args = BuildCommonArgs(s);
+            args["QUALITY"] = s.Quality.ToString();
+            args["FILE_NAME"] = ScriptParameterInjector.EscapeJsString(s.FileName);
+            args["SLICE_MODE"] = sliceMode ? "true" : "false";
+            args["RECURSIVE"] = s.LayerExportRecursive ? "true" : "false";
+            args["SELECTED_ONLY"] = (s.LayerExportRecursive ? s.LayerExportSelectedOnly : s.LayerTopLevelSelectedOnly) ? "true" : "false";
+            return await ExecuteReceiptTaskAsync(ScriptLibrary.GetScript(sliceMode ? ScriptNames.ExportSlices : ScriptNames.ExportLayerBatch), args, s, onProgress, ct);
+        }
+
+        // UNC 网络共享路径：Adobe UXP 引擎沙箱无法直接通过 getEntryWithUrl 访问网络共享路径，
+        // 采用与画板/快速导出相同的本地临时目录中转方案，由 .NET 在完成后安全归并至共享目录。
+        var finalDirectory = s.ExportPath;
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "PSexp", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        var delivered = false;
+        try
+        {
+            var temporarySettings = CloneWithExportPath(s, tempDirectory);
+            var args = BuildCommonArgs(temporarySettings);
+            args["QUALITY"] = s.Quality.ToString();
+            args["FILE_NAME"] = ScriptParameterInjector.EscapeJsString(s.FileName);
+            args["SLICE_MODE"] = sliceMode ? "true" : "false";
+            args["RECURSIVE"] = s.LayerExportRecursive ? "true" : "false";
+            args["SELECTED_ONLY"] = (s.LayerExportRecursive ? s.LayerExportSelectedOnly : s.LayerTopLevelSelectedOnly) ? "true" : "false";
+
+            if (s.AutoRename)
+            {
+                var extension = "." + s.Format.ToExtension();
+                try
+                {
+                    if (Directory.Exists(finalDirectory))
+                    {
+                        args["EXISTING_EXPORT_NAMES"] = System.Text.Json.JsonSerializer.Serialize(
+                            Directory.EnumerateFiles(finalDirectory, "*" + extension)
+                                .Where(path => string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase))
+                                .Select(Path.GetFileName));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn($"枚举 UNC 目录已有文件失败，回退为空集合：{ex.Message}");
+                }
+            }
+
+            var result = await ExecuteReceiptTaskAsync(
+                ScriptLibrary.GetScript(sliceMode ? ScriptNames.ExportSlices : ScriptNames.ExportLayerBatch),
+                args, temporarySettings, onProgress, ct);
+
+            if (result.Success && result.OutputFiles.Count > 0)
+            {
+                var merged = MergeNamedOutputs(result, finalDirectory, s.AutoRename, filePrefix: string.Empty, outputKind: sliceMode ? "切片" : "图层");
+                delivered = merged.Success;
+                return merged;
+            }
+
+            delivered = result.Success;
+            return result;
+        }
+        finally
+        {
+            try
+            {
+                if (delivered && Directory.Exists(tempDirectory))
+                    Directory.Delete(tempDirectory, recursive: true);
+            }
+            catch
+            {
+                // 临时目录清理失败不覆盖导出结果。
+            }
+        }
     }
 
     private async Task<PsBridgeResult> ExecuteReceiptTaskAsync(
@@ -298,7 +367,7 @@ public sealed class ExportService : IExportService
     {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(s.ExportPath);
-        if (args.ContainsKey("SLICE_MODE"))
+        if (args.ContainsKey("SLICE_MODE") && !args.ContainsKey("EXISTING_EXPORT_NAMES"))
         {
             // UXP Folder.getEntries can fail even when getEntryWithUrl resolved the destination.
             // Only names that can collide with this format are needed for automatic suffixes.
@@ -360,7 +429,14 @@ public sealed class ExportService : IExportService
     }
 
     public static string ToUxpFolderUrl(string path)
-        => "file:/" + Path.GetFullPath(path).Replace('\\', '/');
+    {
+        var fullPath = Path.GetFullPath(path).Replace('\\', '/');
+        if (fullPath.StartsWith("//", StringComparison.Ordinal))
+        {
+            return "file:" + fullPath;
+        }
+        return "file:/" + fullPath.TrimStart('/');
+    }
 
     public static PsBridgeResult MergeQuickExportOutputs(
         PsBridgeResult result,

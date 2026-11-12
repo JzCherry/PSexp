@@ -13,7 +13,9 @@ async function runExport() {
         const prepareStarted = Date.now();
         const doc = app.activeDocument;
         sourceDocument = getExportSource(doc);
-        const folder = await require("uxp").storage.localFileSystem.getEntryWithUrl("file:/" + exportPath.replace(/\\/g, "/").replace(/\/$/, ""));
+        const rawPath = exportPath.replace(/\\/g, "/").replace(/\/$/, "");
+        const folderUrl = rawPath.startsWith("//") ? ("file:" + rawPath) : ("file:/" + rawPath.replace(/^\//, ""));
+        const folder = await require("uxp").storage.localFileSystem.getEntryWithUrl(folderUrl);
         const name = psxSafeName(doc.name.replace(/\.[^.]+$/, ""), "export");
         const entry = await folder.createFile(name + "." + format, { overwrite: true });
         timings.prepareFileMs = Date.now() - prepareStarted;
