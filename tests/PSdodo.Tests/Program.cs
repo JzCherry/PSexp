@@ -744,6 +744,7 @@ try
     Run("UXP folder URL preserves Chinese names and spaces", () =>
     {
         Equal("file:/C:/导出 文件", ExportService.ToUxpFolderUrl(@"C:\导出 文件"));
+        Equal("file://192.168.1.199/共享空间/诚睿", ExportService.ToUxpFolderUrl(@"\\192.168.1.199\共享空间\诚睿"));
     });
 
     await RunAsync("UXP receipt waits for done even when files already exist", async () =>
