@@ -756,10 +756,16 @@ public partial class MainWindow : Window
 
     private void OnDockIconRevealRequested(object? sender, DockIconRevealEventArgs e)
     {
-        if (!_isDocked || _isDockRevealed || _pointerDockPosition is not null || _dockMustFinishRetraction) return;
+        if (!_isDocked || _pointerDockPosition is not null || _dockMustFinishRetraction) return;
+        if (_isDockRevealed)
+        {
+            if (e.IsClick) BringToForeground(force: true);
+            return;
+        }
         // 首次拖到边缘时，不能因为刚出现的透明热区恰好落在鼠标下就立即弹回。
         if (_isSnapAnimating && !e.IsClick && !_edgeCanReverseOnPointerReturn) return;
         StartEdgeAnimation(_dockExpandedPos, DockAnimationMotion.RevealDurationMs);
+        BringToForeground(force: true);
     }
 
     private void BeginUndockForDrag(bool restoreExpandedPosition = true)
@@ -1163,14 +1169,39 @@ public partial class MainWindow : Window
         BringToForeground();
     }
 
-    private void BringToForeground()
+    private void BringToForeground(bool force = false)
     {
         Activate();
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Focus();
+            return;
+        }
 
         var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (handle == IntPtr.Zero) return;
-        _ = SetForegroundWindow(handle);
+        if (!SetForegroundWindow(handle) && force)
+        {
+            var foreground = GetForegroundWindow();
+            if (foreground != IntPtr.Zero && foreground != handle)
+            {
+                var fgThread = GetWindowThreadProcessId(foreground, out _);
+                var currentThread = GetCurrentThreadId();
+                if (fgThread != 0 && fgThread != currentThread && AttachThreadInput(currentThread, fgThread, true))
+                {
+                    try
+                    {
+                        _ = SetForegroundWindow(handle);
+                    }
+                    finally
+                    {
+                        _ = AttachThreadInput(currentThread, fgThread, false);
+                    }
+                }
+            }
+        }
+        Activate();
+        Focus();
     }
 
     /// <summary>最小化按钮</summary>
@@ -1275,6 +1306,14 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo,
+        [MarshalAs(UnmanagedType.Bool)] bool attach);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
