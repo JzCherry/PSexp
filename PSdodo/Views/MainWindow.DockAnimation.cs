@@ -565,6 +565,11 @@ public partial class MainWindow
         UpdateStatusAnimationState(restartActiveClocks: false);
         if (_isDocked && _isDockRevealed)
         {
+            if (IsDockWindowForeground() && !IsActive)
+            {
+                Activate();
+                Focus();
+            }
             _edgeHoverTimer.Start();
             if ((_dockRevealedByHotkey || _dockHadForeground) && !IsDockWindowForeground())
                 TryQueueDockRetraction("deactivated");

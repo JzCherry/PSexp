@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -30,6 +31,12 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         ActualThemeVariantChanged += OnActualThemeVariantChanged;
+        ToolTip.ToolTipOpeningEvent.AddClassHandler<Control>((control, args) =>
+        {
+            var tip = ToolTip.GetTip(control);
+            if (tip is null || (tip is string text && string.IsNullOrWhiteSpace(text)))
+                args.Cancel = true;
+        });
     }
 
     public override void OnFrameworkInitializationCompleted()
