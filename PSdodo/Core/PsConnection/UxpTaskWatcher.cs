@@ -31,7 +31,7 @@ public static class UxpTaskWatcher
             string json = "";
             try
             {
-                if (File.Exists(resultPath)) json = await File.ReadAllTextAsync(resultPath, ct);
+                json = await ReadTextSharedAsync(resultPath, ct);
                 if (json.Length > 0) status = JsonSerializer.Deserialize<UxpTaskStatus>(json, JsonOptions);
             }
             catch (IOException) { /* 文件尚未创建，或脚本正在写入。 */ }
@@ -111,6 +111,20 @@ public static class UxpTaskWatcher
                 Message = $"后台写入确认：预期={countDescription}；已确认={completed.Count}；等待={timer.ElapsedMilliseconds}ms；文件须非空、未被写入占用、图片尾标记完整且目录连续稳定 {ExportFileWatcher.StablePeriodMs}ms。"
             }]
         };
+    }
+
+    internal static async Task<string> ReadTextSharedAsync(string path, CancellationToken ct)
+    {
+        if (!File.Exists(path)) return string.Empty;
+        await using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            bufferSize: 4096,
+            useAsync: true);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync(ct);
     }
 
     private sealed class UxpTaskStatus

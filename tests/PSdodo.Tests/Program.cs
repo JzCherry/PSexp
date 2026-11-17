@@ -832,6 +832,27 @@ try
         True(File.Exists(receipt));
     });
 
+    await RunAsync("UXP receipt polling allows concurrent writer updates", async () =>
+    {
+        var output = Path.Combine(tempRoot, "uxp-shared-read");
+        Directory.CreateDirectory(output);
+        var receipt = Path.Combine(output, "result.json");
+        var image = Path.Combine(output, "shared.jpg");
+        File.WriteAllText(image, "image");
+        File.WriteAllText(receipt, "{\"done\":false,\"success\":false,\"files\":[]}");
+        using var writer = new FileStream(receipt, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        var waiting = UxpTaskWatcher.WaitForCompletionAsync(receipt, output, timeoutMs: 5000);
+        await Task.Delay(150);
+        var doneBytes = System.Text.Encoding.UTF8.GetBytes("{\"done\":true,\"success\":true,\"files\":[\"shared.jpg\"]}");
+        writer.SetLength(0);
+        writer.Position = 0;
+        writer.Write(doneBytes);
+        writer.Flush();
+        var result = await waiting;
+        True(result.Success);
+        Equal(1, result.ExportedCount);
+    });
+
     Run("Dock snapshot scale respects DPI and bounds memory", () =>
     {
         Equal(1d, MainWindow.CalculateCaptureScale(725, 515, 1));

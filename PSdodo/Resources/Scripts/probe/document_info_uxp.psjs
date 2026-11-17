@@ -4,7 +4,21 @@ const fs = require("uxp").storage.localFileSystem;
 const state = { done: false, success: false, document: null, warnings: [], error: "" };
 const folder = await fs.getEntryWithUrl("{{RESULT_FOLDER_URL}}");
 const receipt = await folder.createFile("document.json", { overwrite: true });
-await receipt.write(JSON.stringify(state));
+async function writeReceipt() {
+    const text = JSON.stringify(state);
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            await receipt.write(text);
+            return;
+        } catch (error) {
+            if (attempt === 4) throw error;
+            if (typeof setTimeout === "function") {
+                await new Promise(resolve => setTimeout(resolve, 40 * (attempt + 1)));
+            }
+        }
+    }
+}
+await writeReceipt();
 try {
     const info = { name: "", path: "", width: 0, height: 0, hasArtboards: false, artboardCount: 0, hasSlices: false };
     if (app.documents.length) {
@@ -50,4 +64,4 @@ try {
     state.document = info;
     state.success = true;
 } catch (error) { state.error = String(error); state.stack = error && error.stack ? String(error.stack) : ""; }
-finally { state.done = true; await receipt.write(JSON.stringify(state)); }
+finally { state.done = true; await writeReceipt(); }

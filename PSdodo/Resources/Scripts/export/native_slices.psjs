@@ -18,7 +18,7 @@ function safeName(value) {
 async function report() {
     state.stage = stage;
     state.path = activePath;
-    await resultFile.write(JSON.stringify(state));
+    await psxWriteJson(resultFile, state);
 }
 async function exportSlices(context) {
     if (!app.documents.length) throw new Error("没有打开的文档");

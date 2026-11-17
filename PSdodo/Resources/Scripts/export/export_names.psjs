@@ -45,3 +45,19 @@ function psxCheckNativeNames(doc, layers) {
     }
     visit(layers);
 }
+
+// Retry transient file-lock errors (e.g. antivirus or indexer) when updating task receipts.
+async function psxWriteJson(file, value) {
+    const text = JSON.stringify(value);
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            await file.write(text);
+            return;
+        } catch (error) {
+            if (attempt === 4) throw error;
+            if (typeof setTimeout === "function") {
+                await new Promise(resolve => setTimeout(resolve, 40 * (attempt + 1)));
+            }
+        }
+    }
+}

@@ -32,7 +32,11 @@ public sealed partial class PhotoshopService
             ct.ThrowIfCancellationRequested();
             string? raw = null;
             var receiptPath = Path.Combine(taskDirectory, "document.json");
-            try { if (File.Exists(receiptPath)) raw = await File.ReadAllTextAsync(receiptPath, ct); }
+            try
+            {
+                var content = await UxpTaskWatcher.ReadTextSharedAsync(receiptPath, ct);
+                if (content.Length > 0) raw = content;
+            }
             catch (IOException) { }
             if (raw is not null)
             {
