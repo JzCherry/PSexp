@@ -26,7 +26,7 @@ function safeName(value) {
 async function report() {
     state.stage = stage;
     state.path = activePath;
-    await resultFile.write(JSON.stringify(state));
+    await psxWriteJson(resultFile, state);
 }
 
 // Use a single layered working copy and roll back each crop after saving.

@@ -12,7 +12,7 @@ const taskFile = await taskFolder.createFile("result.json", { overwrite: true })
 try {
     taskState.stage = "执行 Photoshop 导出";
     taskState.path = "{{EXPORT_FOLDER_URL}}";
-    await taskFile.write(JSON.stringify(taskState));
+    await psxWriteJson(taskFile, taskState);
     const exportResult = await runExport();
     taskState.timings = exportResult && exportResult.timings;
     taskState.sourceDocument = exportResult && exportResult.sourceDocument;
@@ -39,5 +39,5 @@ try {
     taskState.stack = error && error.stack ? String(error.stack) : "";
 } finally {
     taskState.done = true;
-    await taskFile.write(JSON.stringify(taskState));
+    await psxWriteJson(taskFile, taskState);
 }

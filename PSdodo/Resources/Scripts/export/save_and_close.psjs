@@ -3,6 +3,20 @@ const fs = require("uxp").storage.localFileSystem;
 const folder = await fs.getEntryWithUrl("{{RESULT_FOLDER_URL}}");
 const receipt = await folder.createFile("result.json", { overwrite: true });
 const state = { done: false, success: false, error: "" };
+async function writeReceipt() {
+    const text = JSON.stringify(state);
+    for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+            await receipt.write(text);
+            return;
+        } catch (error) {
+            if (attempt === 4) throw error;
+            if (typeof setTimeout === "function") {
+                await new Promise(resolve => setTimeout(resolve, 40 * (attempt + 1)));
+            }
+        }
+    }
+}
 try {
     await core.executeAsModal(async () => {
         const doc = Array.from(app.documents).find(item => item.id === {{DOCUMENT_ID}});
@@ -18,5 +32,5 @@ try {
     state.error = String(error);
 } finally {
     state.done = true;
-    await receipt.write(JSON.stringify(state));
+    await writeReceipt();
 }
