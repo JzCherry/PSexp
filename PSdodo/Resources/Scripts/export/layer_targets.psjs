@@ -1,15 +1,43 @@
 // 两种图层导出共用目标规则：排除前缀控制“不独立导出”，不是隐藏开关。
+const ADJUSTMENT_LAYER_KINDS = new Set([
+    "blackandwhite",
+    "brightnesscontrast",
+    "channelmixer",
+    "clarity",
+    "colorbalance",
+    "colorlookup",
+    "curves",
+    "exposure",
+    "grain",
+    "gradientmap",
+    "huesaturation",
+    "inversion",
+    "invert",
+    "levels",
+    "photofilter",
+    "posterize",
+    "selectivecolor",
+    "threshold",
+    "vibrance"
+]);
+
+function isAdjustmentLayer(layer) {
+    const kind = layer && layer.kind != null ? String(layer.kind).toLowerCase() : "";
+    return ADJUSTMENT_LAYER_KINDS.has(kind);
+}
+
 function collectLayerExportNodes(doc, topLevelOnly = false) {
     const nodes = [];
     function visit(items, parents = [], excluded = false) {
         for (const layer of items) {
             const blocked = excluded || /^排除/.test(layer.name);
+            const adjustment = isAdjustmentLayer(layer);
             if (topLevelOnly) {
-                nodes.push({ layer, parents, blocked, group: layer.kind === "group" });
+                nodes.push({ layer, parents, blocked, group: layer.kind === "group", adjustment });
                 continue;
             }
             const children = layer.layers ? Array.from(layer.layers) : [];
-            nodes.push({ layer, parents, blocked, group: children.length > 0 || layer.kind === "group" });
+            nodes.push({ layer, parents, blocked, group: children.length > 0 || layer.kind === "group", adjustment });
             if (children.length) visit(children, [...parents, layer.id], blocked);
         }
     }
