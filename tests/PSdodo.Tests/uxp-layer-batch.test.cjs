@@ -15,7 +15,8 @@ async function run(options = {}) {
         { id: 4, name: "排除覆盖", visible: true },
         { id: 5, name: "背景", visible: true, isBackgroundLayer: true }
     ];
-    const original = layers.map(layer => layer.visible);
+    const snapshotVisibility = items => items.flatMap(layer => [layer.visible, ...(layer.layers ? snapshotVisibility(layer.layers) : [])]);
+    const original = snapshotVisibility(layers);
     const entries = new Set(options.existing || []);
     const saves = [], reports = [], alerts = [];
     const folder = {
@@ -28,16 +29,53 @@ async function run(options = {}) {
             return { name };
         }
     };
-    const doc = { name: "设计.psd", layers, saveAs: {} };
-    for (const format of ["png", "jpg"]) doc.saveAs[format] = async (entry, settings, asCopy) => {
-        assert.equal(asCopy, true);
-        if (options.failAt === saves.length + 1) throw new Error("save failed");
-        saves.push({ name: entry.name, format, settings, visible: layers.filter(layer => layer.visible).map(layer => layer.name) });
+    const cloneLayers = items => items.map(layer => ({
+        ...layer,
+        layers: layer.layers ? cloneLayers(layer.layers) : undefined
+    }));
+    const visibleNames = items => items.flatMap(layer => [
+        ...(layer.visible ? [layer.name] : []),
+        ...(layer.layers ? visibleNames(layer.layers) : [])
+    ]);
+    const attachSaveAs = targetDoc => {
+        targetDoc.saveAs = {};
+        for (const format of ["png", "jpg"]) targetDoc.saveAs[format] = async (entry, settings, asCopy) => {
+            assert.equal(asCopy, true);
+            if (options.failAt === saves.length + 1) throw new Error("save failed");
+            saves.push({ name: entry.name, format, settings, visible: visibleNames(targetDoc.layers) });
+        };
     };
+    const doc = {
+        id: 100,
+        name: "设计.psd",
+        layers,
+        activeLayers: options.activeLayers || [],
+        async duplicate(name) {
+            const copy = { id: 101, name, layers: cloneLayers(layers), async trim() {}, async closeWithoutSaving() {} };
+            attachSaveAs(copy);
+            return copy;
+        }
+    };
+    attachSaveAs(doc);
+    const historySnapshots = new Map();
     const ps = {
         app: { documents: options.noDocument ? [] : [doc], activeDocument: doc },
+        constants: { TrimType: { TRANSPARENT: "transparent" } },
         core: {
-            async executeAsModal(fn) { await fn({ isCancelled: !!options.cancel }); },
+            async executeAsModal(fn) {
+                await fn({
+                    isCancelled: !!options.cancel,
+                    hostControl: {
+                        async registerAutoCloseDocument() {},
+                        async suspendHistory({ documentID }) {
+                            const targetDoc = documentID === doc.id ? doc : { layers: [] };
+                            historySnapshots.set(documentID, snapshotVisibility(targetDoc.layers));
+                            return documentID;
+                        },
+                        async resumeHistory() {}
+                    }
+                });
+            },
             async showAlert(message) { alerts.push(message); }
         }
     };
@@ -46,7 +84,7 @@ async function run(options = {}) {
             if (url === "file:/task") return { async createFile() { return {
                 async write(json) {
                     const state = JSON.parse(json);
-                    if (state.done) assert.deepEqual(layers.map(layer => layer.visible), original);
+                    if (state.done) assert.deepEqual(snapshotVisibility(layers), original);
                     reports.push(state);
                 }
             }; } };
@@ -56,7 +94,7 @@ async function run(options = {}) {
         }
     } };
     const args = {
-        RECURSIVE: String(!!options.recursive), SELECTED_ONLY: "false", EXPORT_FOLDER_URL: "file:/output", RESULT_FOLDER_URL: "file:/task",
+        RECURSIVE: String(!!options.recursive), SELECTED_ONLY: String(!!options.selectedOnly), EXPORT_FOLDER_URL: "file:/output", RESULT_FOLDER_URL: "file:/task",
         FORMAT: options.format || "png", QUALITY: String(options.quality || 80), RENAME: String(options.rename !== false),
         EXISTING_EXPORT_NAMES: JSON.stringify(options.rename === false ? [] : [...entries]),
         IMAGE_NAME: options.imageName || "", FILE_NAME: "export", WITH_DOC_NAME: "true", SHOW_HINT: String(!!options.hint)
@@ -69,7 +107,7 @@ async function run(options = {}) {
         throw new Error("Unexpected module " + name);
     } });
     await new vm.Script("(async () => {\n" + script + "\n})()").runInContext(context);
-    assert.deepEqual(layers.map(layer => layer.visible), original);
+    assert.deepEqual(snapshotVisibility(layers), original);
     return { saves, reports, result: reports.at(-1), alerts };
 }
 
@@ -156,6 +194,56 @@ async function run(options = {}) {
             assert.equal(reports.at(-1).done, true);
             assert.equal(alerts.length, 0);
             assert.ok(reports.slice(0, -1).every(report => !report.done));
+        },
+        async "selected-only top-level export keeps all visible unselected layers and keeps hidden ones off"() {
+            const group3 = { id: 3, name: "3", kind: "group", visible: true, layers: [] };
+            const group2 = { id: 4, name: "2", kind: "group", visible: true, layers: [] };
+            const group1 = { id: 5, name: "1", kind: "group", visible: true, layers: [] };
+            const { saves, result } = await run({
+                selectedOnly: true,
+                activeLayers: [group3, group2, group1],
+                layers: [
+                    { id: 1, name: "1_角度002", visible: false },
+                    { id: 8, name: "前景装饰", visible: true },
+                    { id: 2, name: "选取颜色 1", kind: "selectiveColor", visible: true },
+                    { id: 6, name: "隐藏曲线", kind: "curves", visible: false },
+                    group3,
+                    group2,
+                    group1,
+                    { id: 7, name: "背景", visible: true, isBackgroundLayer: true }
+                ]
+            });
+            assert.equal(result.success, true);
+            assert.deepEqual(saves.map(save => save.name), ["设计_3.png", "设计_2.png", "设计_1.png"]);
+            assert.deepEqual(saves[0].visible, ["前景装饰", "选取颜色 1", "3", "背景"]);
+            assert.deepEqual(saves[1].visible, ["前景装饰", "选取颜色 1", "2", "背景"]);
+            assert.deepEqual(saves[2].visible, ["前景装饰", "选取颜色 1", "1", "背景"]);
+        },
+        async "selected-only recursive export keeps visible shared adjustment layers"() {
+            const itemA = { id: 3, name: "素材A", visible: true };
+            const parentGroup = {
+                id: 2,
+                name: "产品组",
+                kind: "group",
+                visible: true,
+                layers: [
+                    { id: 21, name: "组内色阶", kind: "levels", visible: true },
+                    itemA
+                ]
+            };
+            const { saves, result } = await run({
+                recursive: true,
+                selectedOnly: true,
+                activeLayers: [itemA],
+                layers: [
+                    { id: 1, name: "全局色彩", kind: "selectiveColor", visible: true },
+                    parentGroup,
+                    { id: 4, name: "其他组", kind: "group", visible: true, layers: [{ id: 41, name: "无关调整", kind: "curves", visible: true }] }
+                ]
+            });
+            assert.equal(result.success, true);
+            assert.deepEqual(saves.map(save => save.name), ["设计_素材A.png"]);
+            assert.deepEqual(saves[0].visible, ["全局色彩", "产品组", "组内色阶", "素材A"]);
         }
     };
     for (const [name, test] of Object.entries(tests)) { await test(); console.log("PASS " + name); }

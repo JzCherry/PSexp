@@ -61,8 +61,10 @@ async function exportAssets(context, source, sourceNodes, targets, saveTarget) {
             try {
                 for (const node of bottomUp) {
                     const id = node.layer.id;
+                    const isSharedAdjustment = node.adjustment && visibility.get(id) &&
+                        node.parents.every(parentId => targetNode.parents.includes(parentId));
                     const visible = id === targetNode.layer.id || targetNode.parents.includes(id) ||
-                        (node.parents.includes(targetNode.layer.id) && visibility.get(id));
+                        isSharedAdjustment || (node.parents.includes(targetNode.layer.id) && visibility.get(id));
                     if (visibility.get(id) !== visible) node.layer.visible = visible;
                 }
 
@@ -145,6 +147,7 @@ async function exportBatch(executionContext) {
     }
 
     const reversedLayers = [...layers].reverse();
+    const targetIds = new Set(targets.map(target => target.id));
     const currentVisible = new Map(visibility);
     let failure;
     try {
@@ -154,10 +157,10 @@ async function exportBatch(executionContext) {
             activePath = target.name;
             const targetNode = nodeById.get(target.id);
             for (const layer of reversedLayers) {
-                // 画布合成保留背景与排除分支的原显示状态。
+                // 画布合成保留非导出目标集合内的原可见图层（背景、排除分支、调整图层及未选中可见层）。
                 const node = nodeById.get(layer.id);
                 const visible = layer.id === target.id || targetNode.parents.includes(layer.id) ||
-                    ((node.blocked || layer.isBackgroundLayer || node.parents.includes(target.id)) && visibility.get(layer.id));
+                    ((!targetIds.has(layer.id) || node.parents.includes(target.id)) && visibility.get(layer.id));
                 if (currentVisible.get(layer.id) !== visible) {
                     layer.visible = visible;
                     currentVisible.set(layer.id, visible);
