@@ -195,10 +195,17 @@ public partial class MainWindow
                 await FinishEdgeAnimationAsync(generation, hiding);
                 return;
             }
-            if (_pointerDockPosition is not null && !hiding && _dockIconWindow is { Opacity: > 0 } dockIcon)
-                dockIcon.SetTransition(1);
+            if (IsDockIconAllowedByForeground())
+            {
+                if (_pointerDockPosition is not null && !hiding && _dockIconWindow is { Opacity: > 0 } dockIcon)
+                    dockIcon.SetTransition(1);
+                else
+                    ShowDockIcon(hiding ? 0 : 1);
+            }
             else
-                ShowDockIcon(hiding ? 0 : 1);
+            {
+                CloseDockIcon();
+            }
             if (_pointerDockPosition is not null && OperatingSystem.IsWindows() && IsVisible)
             {
                 try
@@ -491,9 +498,16 @@ public partial class MainWindow
         _genieCapturedBitmap = null;
         if (hiding)
         {
-            if (_dockIconWindow is not { Opacity: > 0 }) ShowDockIcon();
-            else _dockIconWindow.SetTransition(1);
-            _dockIconWindow?.PulseArrival(_dockedEdge);
+            if (IsDockIconAllowedByForeground())
+            {
+                if (_dockIconWindow is not { Opacity: > 0 }) ShowDockIcon();
+                else _dockIconWindow.SetTransition(1);
+                _dockIconWindow?.PulseArrival(_dockedEdge);
+            }
+            else
+            {
+                CloseDockIcon();
+            }
             Opacity = 0;
             Position = _offscreenParkPos;
             ClearDockAnimationSurface(retainTexture: true, restoreInput: false);
@@ -554,6 +568,7 @@ public partial class MainWindow
             _dockRevealedByHotkey = false;
             _dockHadForeground = false;
             _pointerDockPosition = null;
+            SyncDockPhotoshopLink();
         }
         if (_resummonPointerAfterMotion)
         {

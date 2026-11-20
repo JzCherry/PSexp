@@ -347,6 +347,10 @@ public partial class MainWindow : Window
         {
             BeginUndockForDrag();
         }
+        if (e.PropertyName == nameof(MainViewModel.DockIconOnlyWhenPhotoshopForeground))
+        {
+            SyncDockPhotoshopLink();
+        }
     }
 
     private void UpdateStatusAnimationState(bool restartActiveClocks)
@@ -469,6 +473,7 @@ public partial class MainWindow : Window
         _refreshRotationClock.Stop();
         _refreshSettleClock.Stop();
         ClearDockAnimationSurface();
+        StopDockPhotoshopLink();
         CloseDockIcon();
         ClearDockRevealBitmap();
         _dockIconWindow?.Close();
@@ -647,6 +652,7 @@ public partial class MainWindow : Window
         vm.IsEdgeDocked = true;
         // 位置写盘移到动画交接后；关闭/托盘路径仍会独立补存。
         StartEdgeAnimation(_dockHiddenPos, durationMs);
+        SyncDockPhotoshopLink();
         return true;
     }
 
@@ -757,6 +763,11 @@ public partial class MainWindow : Window
     private void OnDockIconRevealRequested(object? sender, DockIconRevealEventArgs e)
     {
         if (!_isDocked || _pointerDockPosition is not null || _dockMustFinishRetraction) return;
+        if (!IsDockIconAllowedByForeground())
+        {
+            CloseDockIcon();
+            return;
+        }
         if (_isDockRevealed)
         {
             if (e.IsClick) BringToForeground(force: true);
@@ -790,6 +801,7 @@ public partial class MainWindow : Window
         _pointerDockPosition = null;
         _resummonPointerAfterMotion = false;
         _dockedEdge = DockEdge.None;
+        SyncDockPhotoshopLink();
         if (DataContext is MainViewModel vm)
         {
             vm.SetWindowAnimationActive(false);
@@ -1001,6 +1013,7 @@ public partial class MainWindow : Window
         _exportCommandWindow?.Close();
         Hide();
         if (_isDocked) BeginUndockForDrag();
+        StopDockPhotoshopLink();
         CloseDockIcon();
         ClearDockAnimationSurface();
         StopSettingsPageFade();

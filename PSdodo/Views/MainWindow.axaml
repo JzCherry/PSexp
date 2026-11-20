@@ -1082,7 +1082,31 @@
                                                     </controls:SegmentPanel>
                                                 </controls:AnimatedSegmentTrack>
                                             </Grid>
-                                        <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDelayStartupLine}"/>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDelayDockPhotoshopLine}"/>
+                                            <Grid Classes="settings-row" IsVisible="{Binding ShowDockPhotoshopSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                    <TextBlock Text="悬浮球关联 Photoshop" Classes="setting-label"
+                                                               ToolTip.Tip="开启后，贴边收纳的悬浮球仅在 Photoshop 处于前台时显示；切换到其他应用时自动隐藏。"/>
+                                                    <TextBlock Text="仅在 Photoshop 处于前台时显示" Classes="settings-caption"/>
+                                                </StackPanel>
+                                                <Panel Grid.Column="1" VerticalAlignment="Center">
+                                                    <controls:AnimatedSegmentTrack Classes="choice-track" SelectionValue="{Binding DockIconOnlyWhenPhotoshopForeground}" IsEnabled="{Binding EnableEdgeSnap}">
+                                                        <controls:SegmentPanel>
+                                                            <Button Classes="seg" Command="{Binding SetDockIconOnlyWhenPhotoshopForegroundCommand}" CommandParameter="False" AutomationProperties.Name="悬浮球关联 Photoshop：关闭">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="关闭" Classes="mode-label" Foreground="{Binding DockIconOnlyWhenPhotoshopForeground, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=False}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                            <Button Classes="seg" Command="{Binding SetDockIconOnlyWhenPhotoshopForegroundCommand}" CommandParameter="True" AutomationProperties.Name="悬浮球关联 Photoshop：开启">
+                                                                <controls:ContinuousBorder Background="Transparent" CornerRadius="{StaticResource Radius.SegmentInner}">
+                                                                    <TextBlock Text="开启" Classes="mode-label" Foreground="{Binding DockIconOnlyWhenPhotoshopForeground, Converter={x:Static vm:EqualsToTextBrushConverter.SettingsInstance}, ConverterParameter=True}"/>
+                                                                </controls:ContinuousBorder>
+                                                            </Button>
+                                                        </controls:SegmentPanel>
+                                                    </controls:AnimatedSegmentTrack>
+                                                </Panel>
+                                            </Grid>
+                                            <controls:ContinuousBorder Classes="settings-separator" IsVisible="{Binding ShowDockPhotoshopStartupLine}"/>
                                             <Grid Classes="settings-row" IsVisible="{Binding ShowStartupSetting}" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                 <StackPanel Spacing="2" VerticalAlignment="Center">
                                                     <TextBlock Text="开机静默启动" Classes="setting-label" ToolTip.Tip="登录 Windows 后在托盘运行。可用托盘图标或热键打开主窗口。"/>

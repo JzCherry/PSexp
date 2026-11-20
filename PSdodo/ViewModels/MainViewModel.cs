@@ -95,6 +95,7 @@ public partial class MainViewModel : ViewModelBase
         IsAlwaysOnTop = s.StartAlwaysOnTop;
         AutoRefreshOnActivated = s.AutoRefreshOnActivated;
         EnableEdgeSnap = s.EnableEdgeSnap;
+        DockIconOnlyWhenPhotoshopForeground = s.DockIconOnlyWhenPhotoshopForeground;
         ThemeMode = s.ThemeMode;
         _windowPlacement = s.WindowPlacement;
         _windowWidth = s.WindowWidth;
@@ -143,6 +144,9 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _enableEdgeSnap = true;
+
+    [ObservableProperty]
+    private bool _dockIconOnlyWhenPhotoshopForeground;
 
     /// <summary>窗口当前处于贴边收纳状态；收纳期间强制置顶，避免感应条被其他窗口遮挡。</summary>
     [ObservableProperty]
@@ -814,6 +818,7 @@ public partial class MainViewModel : ViewModelBase
             StartAlwaysOnTop = IsAlwaysOnTop,
             AutoRefreshOnActivated = AutoRefreshOnActivated,
             EnableEdgeSnap = EnableEdgeSnap,
+            DockIconOnlyWhenPhotoshopForeground = DockIconOnlyWhenPhotoshopForeground,
             AutoCheckForUpdates = AutoCheckForUpdates,
             AutoDownloadUpdates = AutoDownloadUpdates,
             CloseToTray = CloseToTray,
@@ -1185,6 +1190,8 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnEnableEdgeSnapChanged(bool value) => SaveBehaviorSettings();
 
+    partial void OnDockIconOnlyWhenPhotoshopForegroundChanged(bool value) => SaveBehaviorSettings();
+
     partial void OnThemeModeChanged(AppThemeMode value)
     {
         App.ApplyTheme(value);
@@ -1246,6 +1253,9 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void SetEnableEdgeSnap(object? value) => EnableEdgeSnap = ParseBooleanCommandParameter(value);
+
+    [RelayCommand]
+    private void SetDockIconOnlyWhenPhotoshopForeground(object? value) => DockIconOnlyWhenPhotoshopForeground = ParseBooleanCommandParameter(value);
 
     [RelayCommand]
     private void OpenDataDirectory()

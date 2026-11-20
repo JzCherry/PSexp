@@ -132,6 +132,7 @@ try
             ExportHighlights = new() { [ExportMode.AllArtboards] = ExportHighlight.Violet, [ExportMode.Slices] = ExportHighlight.Sky },
             StartAlwaysOnTop = true,
             AutoRefreshOnActivated = false,
+            DockIconOnlyWhenPhotoshopForeground = true,
             SummonHotkey = "Ctrl+Alt+Shift+F12",
             SummonHotkeyProgram = Path.Combine(tempRoot, "Example.exe"),
             SummonAtPointer = true,
@@ -156,6 +157,7 @@ try
         Equal(ExportHighlight.Sky, loaded.ExportHighlights[ExportMode.Slices]);
         Equal(expected.StartAlwaysOnTop, loaded.StartAlwaysOnTop);
         Equal(expected.AutoRefreshOnActivated, loaded.AutoRefreshOnActivated);
+        Equal(true, loaded.DockIconOnlyWhenPhotoshopForeground);
         Equal(expected.SummonHotkey, loaded.SummonHotkey);
         Equal(expected.SummonHotkeyProgram, loaded.SummonHotkeyProgram);
         Equal(expected.SummonAtPointer, loaded.SummonAtPointer);
@@ -179,10 +181,12 @@ try
         Equal(false, reloaded.SummonAtPointer);
         Equal(PointerSummonMode.Off, reloaded.SummonPointerMode);
         Equal(false, reloaded.SummonReturnAnimation);
+        Equal(false, reloaded.DockIconOnlyWhenPhotoshopForeground);
         Equal(0, reloaded.ExportHighlights.Count);
 
         File.WriteAllText(settingsPath, """{"summonAtPointer":true}""");
         Equal(PointerSummonMode.Automatic, service.Load().SummonPointerMode);
+        Equal(false, service.Current.DockIconOnlyWhenPhotoshopForeground);
         Equal(AppSettings.DefaultSummonHotkeyProgram, service.Current.SummonHotkeyProgram);
         File.WriteAllText(settingsPath, """{"summonPointerMode":0,"summonAtPointer":true}""");
         Equal(PointerSummonMode.Off, service.Load().SummonPointerMode);
@@ -1025,6 +1029,46 @@ try
         True(!MainViewModel.CalculateEffectiveTopmost(false, false, false));
         True(MainViewModel.CalculateEffectiveTopmost(true, false, false));
         True(MainViewModel.CalculateEffectiveTopmost(false, true, false));
+    });
+
+    Run("DockPhotoshopLink controls dock icon visibility by Photoshop foreground state", () =>
+    {
+        // 关闭关联时，贴边静止态始终显示悬浮球
+        True(DockPhotoshopLink.ShouldShowDockIcon(
+            isDocked: true, isDockRevealed: false, isSnapAnimating: false,
+            isHiddenToTray: false, isClosing: false,
+            onlyWhenPhotoshopForeground: false, isPhotoshopForeground: false));
+
+        // 开启关联时，仅在 Photoshop 前台才显示悬浮球
+        True(DockPhotoshopLink.ShouldShowDockIcon(
+            isDocked: true, isDockRevealed: false, isSnapAnimating: false,
+            isHiddenToTray: false, isClosing: false,
+            onlyWhenPhotoshopForeground: true, isPhotoshopForeground: true));
+        True(!DockPhotoshopLink.ShouldShowDockIcon(
+            isDocked: true, isDockRevealed: false, isSnapAnimating: false,
+            isHiddenToTray: false, isClosing: false,
+            onlyWhenPhotoshopForeground: true, isPhotoshopForeground: false));
+
+        // 未贴边、已展开、动画中、托盘隐藏或关闭中均不显示悬浮球
+        True(!DockPhotoshopLink.ShouldShowDockIcon(false, false, false, false, false, true, true));
+        True(!DockPhotoshopLink.ShouldShowDockIcon(true, true, false, false, false, true, true));
+        True(!DockPhotoshopLink.ShouldShowDockIcon(true, false, true, false, false, true, true));
+        True(!DockPhotoshopLink.ShouldShowDockIcon(true, false, false, true, false, true, true));
+        True(!DockPhotoshopLink.ShouldShowDockIcon(true, false, false, false, true, true, true));
+
+        // 进程路径与类名识别
+        True(DockPhotoshopLink.IsPhotoshopProcessExecutable(@"C:\Program Files\Adobe\Adobe Photoshop 2025\Photoshop.exe"));
+        True(DockPhotoshopLink.IsPhotoshopProcessExecutable(@"D:\Apps\PS\photoshop.exe"));
+        True(!DockPhotoshopLink.IsPhotoshopProcessExecutable(@"C:\Program Files\Google\Chrome\Application\chrome.exe"));
+        True(!DockPhotoshopLink.IsPhotoshopProcessExecutable(@"C:\Apps\PhotoshopHelper.exe"));
+        True(!DockPhotoshopLink.IsPhotoshopProcessExecutable(null));
+        True(!DockPhotoshopLink.IsPhotoshopProcessExecutable(""));
+
+        True(DockPhotoshopLink.IsPhotoshopWindowClass("Photoshop"));
+        True(DockPhotoshopLink.IsPhotoshopWindowClass("OWL.DocumentWindow"));
+        True(DockPhotoshopLink.IsPhotoshopWindowClass("PSFloatC"));
+        True(!DockPhotoshopLink.IsPhotoshopWindowClass("Chrome_WidgetWin_1"));
+        True(!DockPhotoshopLink.IsPhotoshopWindowClass(null));
     });
 
     Run("EdgeSnapHelper chooses nearest edge near a corner", () =>

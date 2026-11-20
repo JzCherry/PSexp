@@ -74,6 +74,9 @@ public sealed class AppSettings
     /// <summary>拖拽窗口贴到屏幕边缘吸附与 Q 弹动效</summary>
     public bool EnableEdgeSnap { get; set; } = true;
 
+    /// <summary>贴边收纳的悬浮球仅在 Photoshop 处于前台时显示</summary>
+    public bool DockIconOnlyWhenPhotoshopForeground { get; set; }
+
     public bool AutoCheckForUpdates { get; set; } = true;
     public bool AutoDownloadUpdates { get; set; }
     public bool CloseToTray { get; set; } = true;

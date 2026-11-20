@@ -132,7 +132,7 @@ public partial class MainWindow
                 Opacity = 0;
                 Position = _offscreenParkPos;
                 WindowTaskSwitcher.Configure(this, excluded: true);
-                ShowDockIcon();
+                SyncDockPhotoshopLink();
             }
         }
         catch (Exception error)
@@ -242,6 +242,7 @@ public partial class MainWindow
         _edgeHoverTimer.Stop();
         Opacity = 0;
         ClearDockAnimationSurface();
+        StopDockPhotoshopLink();
         CloseDockIcon();
         ClearDockRevealBitmap();
         _isDocked = false;

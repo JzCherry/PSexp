@@ -83,7 +83,7 @@ public partial class MainWindow
                 Opacity = 0;
                 Position = _offscreenParkPos;
                 WindowTaskSwitcher.Configure(this, excluded: true);
-                ShowDockIcon();
+                SyncDockPhotoshopLink();
                 return;
             }
             _dockMustFinishRetraction = true;
